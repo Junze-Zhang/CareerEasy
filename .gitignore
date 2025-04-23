@@ -1,0 +1,4 @@
+backend/resume_old
+backend/resume
+credentials.env
+*.db

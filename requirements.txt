@@ -1,0 +1,9 @@
+django
+numpy
+pandas
+openai
+tqdm
+names
+django-phonenumber-field[phonenumbers]
+djangorestframework
+bcrypt
