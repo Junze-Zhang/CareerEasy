@@ -1,4 +1,6 @@
-backend/resume_old
-backend/resume
+CareerEasy/jobs
+CareerEasy/prompts
+CareerEasy/resume
+.debug
 credentials.env
 *.db
