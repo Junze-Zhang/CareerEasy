@@ -6,6 +6,7 @@ from typing import Union, Dict, Tuple
 
 import numpy as np
 from openai import OpenAI
+from django.db.models import QuerySet
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "CareerEasy.settings")
 
@@ -51,8 +52,7 @@ def validate_ai_highlights(response: str) -> bool:
 
 
 def extract_from_resume(candidate: Candidate) -> dict:
-    llm_client = OpenAI(api_key=os.getenv(
-        "DEEPSEEK_API_KEY"), base_url=DEEPSEEK_API_URL)
+    llm_client = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url=DEEPSEEK_API_URL)
     candidate_info = {
         "exp_month": None,
         "skills": None,
@@ -283,14 +283,17 @@ def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) ->
     # Keyword-matching scores are the recall percentages of every preferred keyword in candidate data
     query_high_priority_keywords = query.get('high_priority_keywords', [])
     query_low_priority_keywords = query.get('low_priority_keywords', [])
-    for keyword in query_high_priority_keywords:
-        if keyword in candidate.standardized_skills:
-            skills_score[0] += 1
-        for highlight in candidate.standardized_ai_highlights:
-            if keyword in highlight:
-                ai_highlights_score[0] += 1
-        if keyword in candidate.standardized_resume:
-            resume_score[0] += 1
+    if candidate.standardized_skills:
+        for keyword in query_high_priority_keywords:
+            if keyword in candidate.standardized_skills:
+                skills_score[0] += 1
+        if candidate.standardized_ai_highlights:
+            for highlight in candidate.standardized_ai_highlights:
+                if keyword in highlight:
+                    ai_highlights_score[0] += 1
+        if candidate.standardized_resume:
+            if keyword in candidate.standardized_resume:
+                resume_score[0] += 1
     skills_score[0] = skills_score[0] / \
                       len(query_high_priority_keywords) * \
                       100 if query_high_priority_keywords else 0
@@ -302,12 +305,16 @@ def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) ->
                       100 if query_high_priority_keywords else 0
 
     for keyword in query_low_priority_keywords:
-        if keyword in candidate.standardized_skills:
-            skills_score[1] += 1
-        if keyword in candidate.standardized_ai_highlights:
-            ai_highlights_score[1] += 1
-        if keyword in candidate.standardized_resume:
-            resume_score[1] += 1
+        if candidate.standardized_skills:
+            if keyword in candidate.standardized_skills:
+                skills_score[1] += 1
+        if candidate.standardized_ai_highlights:
+            for highlight in candidate.standardized_ai_highlights:
+                if keyword in highlight:
+                    ai_highlights_score[1] += 1
+        if candidate.standardized_resume:
+            if keyword in candidate.standardized_resume:
+                resume_score[1] += 1
     skills_score[1] = skills_score[1] / \
                       len(query_low_priority_keywords) * \
                       100 if query_low_priority_keywords else 0
@@ -342,9 +349,34 @@ def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) ->
     ]))
 
 
-def rank_candidates(query: dict, candidates: list[Candidate]) -> list[Tuple[Candidate, float]]:
+def rank_candidates(query: dict, candidates: list[Candidate]) -> list[Tuple[Candidate, float]] | QuerySet[Candidate]:
     candidates_with_score = [(candidate, _match_score(query, candidate)) for candidate in candidates]
     return sorted(candidates_with_score, key=lambda x: x[1], reverse=True)
+
+
+def am_i_a_match(candidate: Candidate, job: JobPosting) -> bool:
+    llm_client = OpenAI(api_key=os.getenv(
+        "DEEPSEEK_API_KEY"), base_url=DEEPSEEK_API_URL)
+    prompt = PROMPT_CHECK_FIT.format(
+        company = job.company.name,
+        category = job.company.category.name,
+        job_title = job.title,
+        job_description=job.description, 
+        candidate_title=candidate.title, 
+        highlights=candidate.ai_highlights, 
+        resume=candidate.resume
+    )
+    if settings.DEBUG:
+        print(prompt)
+    response = llm_request(llm_client,
+                           messages=[{"role": "user", "content": prompt}],
+                           validate_fn=lambda _: True,
+                           model="deepseek-reasoner")
+    if not response:
+        raise ValueError("Request failed, please try again later.")
+    if "error" in response:
+        raise ValueError(json.loads(response)["error"])
+    return response
 
 
 if __name__ == "__main__":

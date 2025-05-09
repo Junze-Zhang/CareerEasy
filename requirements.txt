@@ -7,3 +7,5 @@ names
 django-phonenumber-field[phonenumbers]
 djangorestframework
 bcrypt
+drf-spectacular==0.27.1
+drf-spectacular-sidecar==2024.2.1

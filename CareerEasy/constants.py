@@ -1,3 +1,6 @@
+import re
+
+
 DEEPSEEK_API_URL = "https://api.deepseek.com"
 MAX_ATTEMPTS = 4
 NUM_AI_HIGHLIGHTS = 4
@@ -209,3 +212,9 @@ with open("CareerEasy/prompts/candidate_skills.txt", "r") as f:
 PROMPT_CANDIDATE_AI_HIGHLIGHTS = ""
 with open("CareerEasy/prompts/candidate_ai_highlights.txt", "r") as f:
     PROMPT_CANDIDATE_AI_HIGHLIGHTS = f.read()
+    
+PROMPT_CHECK_FIT = ""
+with open("CareerEasy/prompts/am_i_a_good_fit.txt", "r") as f:
+    PROMPT_CHECK_FIT = f.read()
+    
+STANDARDIZE_FN = lambda x: None if x is None else re.sub(r'[^a-zA-Z0-9\s]', '', x).lower()

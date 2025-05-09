@@ -39,7 +39,7 @@ if __name__ == "__main__":
         os.mkdir("jobs")
     if not os.path.exists("jobs/job_info.csv"):
         info = open(f"jobs/job_info.csv", "w", encoding="utf-8")
-        info.write("posted_date,position,level,description,location,country,company,url\n")
+        info.write("posted_date,position,level,description,location,state,country,company,url\n")
     else:
         info = open(f"jobs/job_info.csv", "a", encoding="utf-8")
 
@@ -69,12 +69,14 @@ if __name__ == "__main__":
                                       messages,
                                       lambda r: career_name.lower() in r.lower() and company.name.lower() in r.lower(),
                                       "Invalid job posting: ")
+            if not job_posting:
+                continue
             filename = f"{company.name}_{career_name}_job_posting.md"
             filepath = "jobs/" + filename
             while os.path.exists(filepath):
                 filepath = filepath.replace("_job_posting", f"_1_job_posting")
             with open(filepath, "w") as f:
-                f.write(job_posting)
+                    f.write(job_posting)
             job_url = f"https://www.{company.name.lower().replace(' ', '')}.com/jobs/{str(uuid.uuid4())[-12:]}"
             info.write(f"{datetime.datetime.now().strftime('%Y-%m-%d')},"
                        f"{career_name},"
