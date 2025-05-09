@@ -101,19 +101,69 @@ def init_candidate_title():
     for candidate in candidates:
         if candidate.title is not None:
             continue
-        print(candidate.first_name + " " + candidate.last_name)
+#        print(candidate.first_name + " " + candidate.last_name)
         candidate.title = candidate.preferred_career_types.first().name
         candidate.save()
         
-def init_candidate_standardized(standarize_fn = lambda x: re.sub(r'[^a-zA-Z0-9\s]', '', x).lower()):
+def init_candidate_standardized(standarize_fn = STANDARDIZE_FN):
     candidates = Candidate.objects.all()
     for candidate in candidates:
         candidate.standardized_title = standarize_fn(candidate.title)
-        candidate.standardized_skills = [standarize_fn(skill) for skill in candidate.skills]
-        candidate.standardized_ai_highlights = [standarize_fn(highlight) for highlight in candidate.ai_highlights]
+        candidate.standardized_skills = [standarize_fn(skill) for skill in candidate.skills] if candidate.skills is not None else None
+        candidate.standardized_ai_highlights = [standarize_fn(highlight) for highlight in candidate.ai_highlights] if candidate.ai_highlights is not None else None
         candidate.standardized_highest_education = standarize_fn(candidate.highest_education)
         candidate.standardized_resume = standarize_fn(candidate.resume)
         candidate.save()
         
+def init_job_posting():
+    jobs_df = pd.read_csv("CareerEasy/jobs/job_info.csv")
+    for _, row in tqdm(jobs_df.iterrows()):
+        print(row["company"])
+        company = Company.objects.filter(name=row["company"]).first()
+        if company is None:
+            print(row["company"])
+            continue
+        career = Career.objects.filter(name=row["position"]).first()
+        if career is None:
+            print(row["position"])
+            continue
+        match row["level"]:
+            case "ng":
+                job_level = "new graduate"
+                yoe = 0
+            case "j":
+                job_level = "junior"
+                yoe = random.randint(0, 3)
+            case "s":
+                job_level = "senior"
+                yoe = random.randint(3, 10)
+            case "u":
+                job_level = "unspecified"
+                yoe = random.randint(1, 10) * random.randint(0, 1)
+        if job_level != "unspecified":
+            title = job_level + " " + row["position"] if random.random() >= 0.5 else row["position"]
+        else:
+            title = row["position"]
+        job = JobPosting(title=title,
+                         description=open(f"CareerEasy/{row['description']}").read(),
+                         level=job_level,
+                         yoe=yoe,
+                         company=company,
+                         career=career,
+                         url=row["url"],
+                         posted_at = datetime.strptime(row["posted_date"], "%Y-%m-%d"))
+        job.save()
         
-        
+def init_job_posting_yoe():
+    for job in JobPosting.objects.all():
+        match job.level:
+            case "ng":
+                yoe = 0
+            case "j":
+                yoe = random.randint(0, 3)
+            case "s":
+                yoe = random.randint(3, 10)
+            case "u":
+                yoe = random.randint(1, 10) * random.randint(0, 1)
+        job.yoe = yoe   
+        job.save()

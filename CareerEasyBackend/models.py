@@ -29,6 +29,7 @@ class Company(models.Model):
     logo = models.URLField(blank=True, null=True)
     location = models.CharField(max_length=100)
     country = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
 
     class Meta:
         constraints = [
@@ -94,9 +95,11 @@ class JobPosting(models.Model):
     deleted = models.BooleanField(default=False)
 
 
-class ApplicantAccount(models.Model):
+class Query(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    email = models.EmailField(unique=True)
-    password = models.CharField(max_length=100)
-    candidate = models.ForeignKey(
-        Candidate, on_delete=models.CASCADE, null=True, blank=True)
+    query = models.TextField() # TODO: encrypt this field
+    standardized_query = models.TextField()
+    query_response = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted = models.BooleanField(default=False)

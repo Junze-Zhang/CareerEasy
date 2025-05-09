@@ -3,7 +3,7 @@ import numpy as np
 from openai import OpenAI
 import names
 from tqdm import tqdm
-
+import os
 from llm_utils import llm_request
 from constants import *
 

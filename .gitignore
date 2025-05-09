@@ -1,6 +1,9 @@
 CareerEasy/jobs
 CareerEasy/prompts
 CareerEasy/resume
+careereasyfrontend/node_modules
+
 .debug
 credentials.env
 *.db
+node_modules
