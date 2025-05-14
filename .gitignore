@@ -7,3 +7,5 @@ careereasyfrontend/node_modules
 credentials.env
 *.db
 node_modules
+.vscode
+.idea
