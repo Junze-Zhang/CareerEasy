@@ -178,20 +178,45 @@ SPECTACULAR_SETTINGS = {
     'REDOC_DIST': 'SIDECAR',
 }
 
+# CORS settings
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://15.223.47.120",  # Add your EC2 domain/IP here
+    "http://15.223.47.120:8000",  # Add your EC2 domain/IP here
+    "http://15.223.47.120:3000",  # Add your EC2 domain/IP here
 ]
 
 # Add your EC2 domain/IP to CSRF trusted origins
 CSRF_TRUSTED_ORIGINS = [
-    "https://15.223.47.120",  # Add your EC2 domain/IP here
+    "http://15.223.47.120:8000",  # Add your EC2 domain/IP here
+    "http://15.223.47.120:3000",  # Add your EC2 domain/IP here
 ]
 
 # DO NOT set CORS_ALLOW_ALL_ORIGINS = True if using credentials!
 # CORS_ALLOW_ALL_ORIGINS = False  # (default)
+
+# Additional CORS settings
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # Load environment variables from credentials.env
 result = load_dotenv('credentials.env')
