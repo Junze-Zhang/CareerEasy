@@ -25,9 +25,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-4kod)$j6igo6&#=#k0)5d198_ty%uuanjjw3$w1%810n&_e)yg'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['15.223.47.120', 'localhost', '127.0.0.1', 'careereasy.com']  # You should replace this with your actual EC2 domain/IP in production
 
 
 # Application definition
@@ -182,7 +182,12 @@ CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    # Add your production frontend URL here when deploying
+    "https://15.223.47.120",  # Add your EC2 domain/IP here
+]
+
+# Add your EC2 domain/IP to CSRF trusted origins
+CSRF_TRUSTED_ORIGINS = [
+    "https://15.223.47.120",  # Add your EC2 domain/IP here
 ]
 
 # DO NOT set CORS_ALLOW_ALL_ORIGINS = True if using credentials!
@@ -198,3 +203,14 @@ if DEBUG:
         print("Failed to load environment variables.")
         print(f"Current working directory: {os.getcwd()}")
         print(f"Looking for credentials.env in: {os.path.join(os.getcwd(), 'credentials.env')}")
+
+# Security settings for production
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
