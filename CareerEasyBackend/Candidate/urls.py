@@ -7,6 +7,8 @@ urlpatterns = [
     path('signup', candidate_views.sign_up),
     path('upload_resume', candidate_views.upload_resume),
     path('ai_extract', candidate_views.extract_candidate_info),
+    path('update_info', candidate_views.update_candidate_info),
+    path('update_highlights', candidate_views.update_highlights),
     path('jobs', candidate_views.get_posted_jobs),
     path('job_detail/<str:job_id>', candidate_views.get_job_details),
     path('company_detail/<str:company_id>', candidate_views.get_company_details),
