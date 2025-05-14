@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-4kod)$j6igo6&#=#k0)5d198_ty%uuanjjw3$w1%810n&_e)yg
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['15.223.47.120', 'localhost', '127.0.0.1', 'careereasy.com']  # You should replace this with your actual EC2 domain/IP in production
+ALLOWED_HOSTS = ['*']  # Allow all hosts
 
 
 # Application definition
@@ -48,14 +48,13 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'CareerEasy.urls'
@@ -178,45 +177,29 @@ SPECTACULAR_SETTINGS = {
     'REDOC_DIST': 'SIDECAR',
 }
 
-# CORS settings
+# CORS settings - completely permissive
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = ['*']
+CORS_ALLOW_HEADERS = ['*']
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://15.223.47.120:8000",  # Add your EC2 domain/IP here
-    "http://15.223.47.120:3000",  # Add your EC2 domain/IP here
-]
+# Disable all security settings
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SECURE_BROWSER_XSS_FILTER = False
+SECURE_CONTENT_TYPE_NOSNIFF = False
+X_FRAME_OPTIONS = 'ALLOW'
+SECURE_HSTS_SECONDS = 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
 
-# Add your EC2 domain/IP to CSRF trusted origins
-CSRF_TRUSTED_ORIGINS = [
-    "http://15.223.47.120:8000",  # Add your EC2 domain/IP here
-    "http://15.223.47.120:3000",  # Add your EC2 domain/IP here
-]
-
-# DO NOT set CORS_ALLOW_ALL_ORIGINS = True if using credentials!
-# CORS_ALLOW_ALL_ORIGINS = False  # (default)
-
-# Additional CORS settings
-CORS_ALLOW_METHODS = [
-    'DELETE',
-    'GET',
-    'OPTIONS',
-    'PATCH',
-    'POST',
-    'PUT',
-]
-
-CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-]
+# Disable CSRF for demo
+CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False
+CSRF_TRUSTED_ORIGINS = ['*']
+CSRF_USE_SESSIONS = False
+CSRF_COOKIE_SAMESITE = None
 
 # Load environment variables from credentials.env
 result = load_dotenv('credentials.env')
@@ -228,14 +211,3 @@ if DEBUG:
         print("Failed to load environment variables.")
         print(f"Current working directory: {os.getcwd()}")
         print(f"Looking for credentials.env in: {os.path.join(os.getcwd(), 'credentials.env')}")
-
-# # Security settings for production
-# SECURE_SSL_REDIRECT = False
-# SESSION_COOKIE_SECURE = False
-# CSRF_COOKIE_SECURE = False
-# SECURE_BROWSER_XSS_FILTER = True
-# SECURE_CONTENT_TYPE_NOSNIFF = True
-# X_FRAME_OPTIONS = 'DENY'
-# SECURE_HSTS_SECONDS = 0  # Disable HSTS
-# SECURE_HSTS_INCLUDE_SUBDOMAINS = False
-# SECURE_HSTS_PRELOAD = False
