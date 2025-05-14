@@ -19,8 +19,10 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
-
+from CareerEasyBackend.views import get_careers
 urlpatterns = [
+    path('careers', get_careers, name='get_careers'),
+    
     # path('admin/', admin.site.urls),
     path('employer/', include("CareerEasyBackend.Employer.urls")),
     path('candidate/', include("CareerEasyBackend.Candidate.urls")),

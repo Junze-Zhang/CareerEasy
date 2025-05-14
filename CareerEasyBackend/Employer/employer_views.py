@@ -6,8 +6,9 @@ from typing import Optional
 from datetime import timedelta
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.db.models import Q, F
-from django.shortcuts import get_object_or_404
+from django.db.models import Q, F, CharField, Value
+from django.db.models.functions import Concat
+from django.shortcuts import get_object_or_404, redirect
 from django.template import loader
 from django.utils.timezone import now
 from django.http import JsonResponse, Http404, HttpResponse
@@ -356,23 +357,34 @@ def search_candidates(request):
     }
 )
 @api_view(['GET'])
-def get_company(request):
+def get_company(request, company_id):
+    company = Company.objects.filter(id=company_id).first()
+    if company is None:
+        return JsonResponse({"Error": "Company not found."}, status=404)
     employer_id = request.COOKIES.get('employer_id')
     employer = EmployerAccount.objects.filter(id=employer_id).first()
-    if employer is None:
-        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
-    if employer.company is None:
-        return JsonResponse({"Error": "No associated company found. Please create a new company or associate an existing company."}, status=404)
-    return JsonResponse({"company__name": employer.company.name,
-                         "company__location": employer.company.location,
-                         "company__country": employer.company.country,
-                         "company__description": employer.company.description,
-                         "company__category": employer.company.category.name}, status=200)
+    if employer is not None and employer.company == company:
+        return JsonResponse({"company__name": company.name,
+                             "company__location": company.location,
+                             "company__country": company.country,
+                             "company__description": company.description,
+                             "company__category": company.category.name,
+                             "company__logo": company.logo}, status=200) # Currently the same. Will differ if some company information is not public in future dev.
+    return JsonResponse({"company__name": company.name,
+                         "company__location": company.location,
+                         "company__country": company.country,
+                         "company__description": company.description,
+                         "company__category": company.category.name,
+                         "company__logo": company.logo}, status=200)
 
 
 @extend_schema(
     tags=['Employer Candidate Search'],
     description='Get list of candidates',
+    parameters=[
+        OpenApiParameter(name='page', description='Page number', required=False, type=int),
+        OpenApiParameter(name='page_size', description='Number of items per page', required=False, type=int)
+    ],
     request={
         'application/json': {
             'type': 'object',
@@ -389,10 +401,10 @@ def get_company(request):
 @api_view(['GET'])
 def get_candidates(request):
     page = request.GET.get('page', 1)
-    page_size = request.GET.get('page_size', 20)
+    page_size = request.GET.get('page_size', 10)
     candidates = Paginator(Candidate.objects
                            .annotate(
-                               name=F('first_name') + " " + F('last_name')
+                               name=Concat('first_name', Value(' '), 'last_name', output_field=CharField())
                            )
                            .values('id',
                                    'name',
@@ -453,6 +465,10 @@ def natural_language_query(request):
 @extend_schema(
     tags=['Employer Candidate Search'],
     description='Get ranked candidates based on search criteria',
+    parameters=[
+        OpenApiParameter(name='page', description='Page number', required=False, type=int),
+        OpenApiParameter(name='page_size', description='Number of items per page', required=False, type=int)
+    ],
     request={
         'application/json': {
             'type': 'object',
@@ -461,9 +477,7 @@ def natural_language_query(request):
                 'maximal_years_of_experience': {'type': 'number', 'description': 'Maximum years of experience'},
                 'preferred_title_keywords': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Preferred job titles'},
                 'high_priority_keywords': {'type': 'array', 'items': {'type': 'string'}, 'description': 'High priority skills'},
-                'low_priority_keywords': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Low priority skills'},
-                'page': {'type': 'integer', 'description': 'Page number'},
-                'page_size': {'type': 'integer', 'description': 'Number of items per page'}
+                'low_priority_keywords': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Low priority skills'}
             }
         }
     },
@@ -474,7 +488,13 @@ def natural_language_query(request):
     }
 )
 @api_view(['POST'])
-def get_ranked_candidates(request, page=1, page_size=20):
+def get_ranked_candidates(request):
+    try:
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 10))
+    except ValueError:
+        return JsonResponse({"Error": "Invalid page or page_size parameters"}, status=400)
+        
     data = request.data
     minimal_years_of_experience = data.get('minimal_years_of_experience')
     maximal_years_of_experience = data.get('maximal_years_of_experience')

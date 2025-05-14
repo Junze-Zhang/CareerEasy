@@ -213,6 +213,10 @@ PROMPT_CANDIDATE_AI_HIGHLIGHTS = ""
 with open("CareerEasy/prompts/candidate_ai_highlights.txt", "r") as f:
     PROMPT_CANDIDATE_AI_HIGHLIGHTS = f.read()
     
+PROMPT_CANDIDATE_AI_HIGHLIGHTS_CUSTOMIZE = ""
+with open("CareerEasy/prompts/candidate_ai_highlights_customize.txt", "r") as f:
+    PROMPT_CANDIDATE_AI_HIGHLIGHTS_CUSTOMIZE = f.read()
+    
 PROMPT_CHECK_FIT = ""
 with open("CareerEasy/prompts/am_i_a_good_fit.txt", "r") as f:
     PROMPT_CHECK_FIT = f.read()

@@ -1,3 +1,9 @@
+from CareerEasy.llm_utils import llm_request
+from CareerEasyBackend.models import Candidate, JobPosting
+from CareerEasy.constants import *
+from django.conf import settings
+from django.core.management import call_command
+import django
 from datetime import datetime
 import json
 import os
@@ -10,17 +16,8 @@ from django.db.models import QuerySet
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "CareerEasy.settings")
 
-import django
 
 django.setup()
-
-from django.core.management import call_command
-
-from django.conf import settings
-
-from CareerEasy.constants import *
-from CareerEasyBackend.models import Candidate, JobPosting
-from CareerEasy.llm_utils import llm_request
 
 
 def validate_exp(response: str) -> bool:
@@ -46,13 +43,14 @@ def validate_skills(response: str) -> bool:
 def validate_ai_highlights(response: str) -> bool:
     try:
         response = json.loads(response)
-        return isinstance(response["highlights"], list) and len(response["highlights"]) == NUM_AI_HIGHLIGHTS
+        return "Error" in response or (isinstance(response["highlights"], list) and len(response["highlights"]) == NUM_AI_HIGHLIGHTS)
     except:
         return False
 
 
 def extract_from_resume(candidate: Candidate) -> dict:
-    llm_client = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url=DEEPSEEK_API_URL)
+    llm_client = OpenAI(api_key=os.getenv(
+        "DEEPSEEK_API_KEY"), base_url=DEEPSEEK_API_URL)
     candidate_info = {
         "exp_month": None,
         "skills": None,
@@ -117,6 +115,29 @@ def extract_from_resume(candidate: Candidate) -> dict:
         "highlights"]
     return candidate_info
 
+def update_ai_highlights(candidate: Candidate, custom_prompt: str) -> dict:
+    llm_client = OpenAI(api_key=os.getenv(
+        "DEEPSEEK_API_KEY"), base_url=DEEPSEEK_API_URL)
+    prompt = PROMPT_CANDIDATE_AI_HIGHLIGHTS_CUSTOMIZE.format(
+        num_highlights=NUM_AI_HIGHLIGHTS,
+        name=candidate.first_name + " " + candidate.last_name,
+        career=candidate.preferred_career_types.first().name,
+        resume=candidate.resume,
+        candidate_prompt=custom_prompt
+    )
+    if settings.DEBUG:
+        print(prompt)
+    messages = [{"role": "user", "content": prompt}]
+    response = llm_request(llm_client,
+                           messages=messages,
+                           validate_fn=validate_ai_highlights,
+                           model="deepseek-reasoner")
+    if not response:
+        raise ValueError("Failed to update ai highlights. Please try again later.")
+    response = json.loads(response)
+    if "error" in response:
+        raise ValueError(response["error"])
+    return response["highlights"]
 
 def validate_query(response: str) -> bool:
     try:
@@ -264,14 +285,14 @@ def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) ->
             # deduct 50 points if candidate has 2x more than max required (else linearly);
             # also deduct 10 points for each year exceeded (max 50)
             experience_score = max((50 * (2 - candidate_exp_months / max_months)), 0) + \
-                               max(50 - 10 * (candidate_exp_months - max_months) / 12, 0)
+                max(50 - 10 * (candidate_exp_months - max_months) / 12, 0)
     else:  # underqualified; scale experience score linearly up to 80
         experience_score = (min_months -
                             candidate_exp_months) / min_months * 80
     # 90% weight on experience match score
     # 10% weight on base score: 10 point for every year of experience, max 100
     experience_score = experience_score * 0.9 + \
-                       min(candidate_exp_months / 12 * 10, 100) * 0.1
+        min(candidate_exp_months / 12 * 10, 100) * 0.1
 
     # Title matching score: if any of preferred title matches the candidate, they get a score of 100
     query_preferred_title_keywords = query.get('preferred_title_keywords', [])
@@ -295,14 +316,14 @@ def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) ->
             if keyword in candidate.standardized_resume:
                 resume_score[0] += 1
     skills_score[0] = skills_score[0] / \
-                      len(query_high_priority_keywords) * \
-                      100 if query_high_priority_keywords else 0
+        len(query_high_priority_keywords) * \
+        100 if query_high_priority_keywords else 0
     ai_highlights_score[0] = ai_highlights_score[0] / \
-                             len(query_high_priority_keywords) * \
-                             100 if query_high_priority_keywords else 0
+        len(query_high_priority_keywords) * \
+        100 if query_high_priority_keywords else 0
     resume_score[0] = resume_score[0] / \
-                      len(query_high_priority_keywords) * \
-                      100 if query_high_priority_keywords else 0
+        len(query_high_priority_keywords) * \
+        100 if query_high_priority_keywords else 0
 
     for keyword in query_low_priority_keywords:
         if candidate.standardized_skills:
@@ -316,14 +337,14 @@ def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) ->
             if keyword in candidate.standardized_resume:
                 resume_score[1] += 1
     skills_score[1] = skills_score[1] / \
-                      len(query_low_priority_keywords) * \
-                      100 if query_low_priority_keywords else 0
+        len(query_low_priority_keywords) * \
+        100 if query_low_priority_keywords else 0
     ai_highlights_score[1] = ai_highlights_score[1] / \
-                             len(query_low_priority_keywords) * \
-                             100 if query_low_priority_keywords else 0
+        len(query_low_priority_keywords) * \
+        100 if query_low_priority_keywords else 0
     resume_score[1] = resume_score[1] / \
-                      len(query_low_priority_keywords) * \
-                      100 if query_low_priority_keywords else 0
+        len(query_low_priority_keywords) * \
+        100 if query_low_priority_keywords else 0
 
     if return_raw:
         return {
@@ -334,10 +355,10 @@ def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) ->
             "resume_score": resume_score
         }
     return float(np.average([experience_score,
-                       title_score,
-                       *skills_score,
-                       *ai_highlights_score,
-                       *resume_score], weights=[
+                             title_score,
+                             *skills_score,
+                             *ai_highlights_score,
+                             *resume_score], weights=[
         10,
         10,
         5,
@@ -350,7 +371,8 @@ def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) ->
 
 
 def rank_candidates(query: dict, candidates: list[Candidate]) -> list[Tuple[Candidate, float]] | QuerySet[Candidate]:
-    candidates_with_score = [(candidate, _match_score(query, candidate)) for candidate in candidates]
+    candidates_with_score = [(candidate, _match_score(
+        query, candidate)) for candidate in candidates]
     return sorted(candidates_with_score, key=lambda x: x[1], reverse=True)
 
 
@@ -358,12 +380,14 @@ def am_i_a_match(candidate: Candidate, job: JobPosting) -> bool:
     llm_client = OpenAI(api_key=os.getenv(
         "DEEPSEEK_API_KEY"), base_url=DEEPSEEK_API_URL)
     prompt = PROMPT_CHECK_FIT.format(
-        company = job.company.name,
-        category = job.company.category.name,
-        job_title = job.title,
-        job_description=job.description, 
-        candidate_title=candidate.title, 
-        highlights=candidate.ai_highlights, 
+        company=job.company.name,
+        category=job.company.category.name,
+        job_title=job.title,
+        job_description=job.description,
+        candidate_title=candidate.title,
+        highlights="\n".join(candidate.ai_highlights)
+                    if isinstance(candidate.ai_highlights, list)
+                    else candidate.ai_highlights,
         resume=candidate.resume
     )
     if settings.DEBUG:
@@ -386,4 +410,5 @@ if __name__ == "__main__":
     print(query)
     rank = rank_candidates(query, Candidate.objects.all())
     for candidate, match in rank:
-        print(candidate.experience_months, candidate.title, candidate.ai_highlights[2], match)
+        print(candidate.experience_months, candidate.title,
+              candidate.ai_highlights[2], match)

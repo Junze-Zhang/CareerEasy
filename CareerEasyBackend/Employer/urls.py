@@ -11,7 +11,7 @@ urlpatterns = [
     path('query', employer_views.natural_language_query),
     path('rank', employer_views.get_ranked_candidates),
     path('jobs', employer_views.get_posted_jobs),
-    path('company/mycompany', employer_views.get_company),
+    path('company/<str:company_id>', employer_views.get_company),
     path('company/create', employer_views.create_company),
     path('search', employer_views.search_candidates),
     path('postjob', employer_views.post_job),
