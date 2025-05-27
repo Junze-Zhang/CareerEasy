@@ -24,7 +24,7 @@ export default function CandidateProfile() {
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
   const [careerTypes, setCareerTypes] = useState([]);
   const [preferredCareers, setPreferredCareers] = useState([]);
-  const [editCareers, setEditCareers] = useState(false);
+  const [preferredCareersChanged, setPreferredCareersChanged] = useState(false);
   const [infoChanged, setInfoChanged] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [experience, setExperience] = useState({ years: 0, months: 0 });
@@ -36,6 +36,22 @@ export default function CandidateProfile() {
   const [customPrompt, setCustomPrompt] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const [backDialogOpen, setBackDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    // username: '',
+    // email: '',
+    // phone: '',
+    // first_name: '',
+    // middle_name: '',
+    // last_name: '',
+    // work_email: '',
+    preferred_career_types: [],
+    // location: '',
+    // country: '',
+    // title: '',
+    skills: [],
+    experience_months: 0,
+    highest_education: ''
+  });
 
   // Fetch candidate info and check if self
   useEffect(() => {
@@ -50,34 +66,67 @@ export default function CandidateProfile() {
 
         // Fetch candidate info
         const response = await candidateAPI.candidateInfo(candidateId);
-        const data = await response.json();
-        setCandidate(data);
+        const data = response.data;
+        setCandidate(data); // Set the full candidate data
+
+        // Parse preferred career types from the response
+        const preferredCareerIds = data.preferred_career_types || [];
+        setPreferredCareers(preferredCareerIds);
+        
+        setFormData({
+          // username: data.username || '',
+          // email: data.email || '',
+          // phone: data.phone || '',
+          // first_name: data.first_name || '',
+          // middle_name: data.middle_name || '',
+          // last_name: data.last_name || '',
+          // work_email: data.work_email || '',
+          preferred_career_types: preferredCareerIds,
+          // location: data.location || '',
+          // country: data.country || '',
+          // title: data.title || '',
+          skills: data.skills || [],
+          experience_months: data.experience_months || 0,
+          highest_education: data.highest_education || ''
+        });
 
         // If self, set editable fields
         if (loggedInId === candidateId) {
-          setPreferredCareers(data.preferred_career_types || []);
           setExperience(parseExperience(data.experience_months));
           setHighestEducation(data.highest_education || '');
           setSkills(data.skills || []);
           setAiHighlights(data.highlights || []);
         }
       } catch (error) {
-        setSnackbar({ open: true, message: 'Failed to load candidate info.', severity: 'error' });
+        console.error('Error fetching candidate info:', error);
+        setSnackbar({
+          open: true,
+          message: error.response?.data?.Error || "Failed to fetch profile information. Please try again later.",
+          severity: "error"
+        });
+        navigate('/'); // Redirect to home on error
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     const fetchCareers = async () => {
       try {
         const response = await generalAPI.getCareers();
-        const data = await response.json();
-        setCareerTypes(data);
+        setCareerTypes(response.data);
+        // After getting career types, fetch candidate data
+        fetchData();
       } catch (error) {
-        // ignore
+        console.error('Error fetching career types:', error);
+        setSnackbar({
+          open: true,
+          message: error.response?.data?.Error || "Failed to fetch career types. Please try again later.",
+          severity: "error"
+        });
+        setLoading(false);
       }
     };
 
-    fetchData();
     fetchCareers();
     // eslint-disable-next-line
   }, [candidateId]);
@@ -98,27 +147,38 @@ export default function CandidateProfile() {
   // Preferred careers handlers
   const handleCareersChange = (event, newValue) => {
     setPreferredCareers(newValue.map(career => career.id));
-    setInfoChanged(true);
-  };
-
-  // Experience/education edit
-  const handleEditSave = () => {
-    setEditDialogOpen(false);
+    setPreferredCareersChanged(true);
     setInfoChanged(true);
   };
 
   // Skills handlers
   const handleRemoveSkill = (skillToRemove) => {
-    setSkills(skills.filter(skill => skill !== skillToRemove));
+    const newSkills = skills.filter(skill => skill !== skillToRemove);
+    setSkills(newSkills);
+    setFormData(prev => ({ ...prev, skills: newSkills }));
     setInfoChanged(true);
   };
 
   const handleAddSkill = () => {
     if (newSkill && !skills.includes(newSkill)) {
-      setSkills([...skills, newSkill]);
+      const newSkills = [...skills, newSkill];
+      setSkills(newSkills);
+      setFormData(prev => ({ ...prev, skills: newSkills }));
       setNewSkill('');
       setInfoChanged(true);
     }
+  };
+
+  // Experience/education edit
+  const handleEditSave = () => {
+    const totalMonths = (parseInt(experience.years) * 12) + parseInt(experience.months);
+    setFormData(prev => ({
+      ...prev,
+      experience_months: totalMonths,
+      highest_education: highestEducation
+    }));
+    setEditDialogOpen(false);
+    setInfoChanged(true);
   };
 
   // Regenerate AI highlights
@@ -127,43 +187,75 @@ export default function CandidateProfile() {
     setLoading(true);
     try {
       const response = await candidateAPI.updateHighlights({ custom_prompt: customPrompt });
-      const data = await response.json();
-      setAiHighlights(data.highlights || []);
-      setSnackbar({ open: true, message: 'AI highlights regenerated!', severity: 'success' });
+      if (response.status === 200) {
+        setAiHighlights(response.data.highlights || []);
+        setSnackbar({ open: true, message: 'AI highlights regenerated!', severity: 'success' });
+      } else {
+        throw new Error(response.data?.Error || 'Failed to regenerate highlights');
+      }
     } catch (error) {
-      setSnackbar({ open: true, message: 'Failed to regenerate highlights.', severity: 'error' });
+      console.error('Error regenerating highlights:', error);
+      setSnackbar({ 
+        open: true, 
+        message: error.response?.data?.Error || 'Failed to regenerate highlights.', 
+        severity: 'error' 
+      });
     }
     setLoading(false);
   };
 
   // Submit updated info
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setLoading(true);
     try {
-      const infoData = {
-        experience_months: Number(experience.years) * 12 + Number(experience.months),
-        highest_education: highestEducation,
-        skills: skills,
-        preferred_career_types: preferredCareers
+      // Only include preferred_career_types if they were changed
+      const submitData = {
+        ...formData,
+        preferred_career_types: preferredCareersChanged ? preferredCareers : undefined
       };
-      const response = await candidateAPI.updateInfo(infoData);
-      if (response.ok) {
-        setSnackbar({ open: true, message: 'Profile updated successfully!', severity: 'success' });
-        setInfoChanged(false);
-        setTimeout(() => window.location.reload(), 1000);
-      } else {
-        setSnackbar({ open: true, message: 'Failed to update profile.', severity: 'error' });
+      
+      const response = await candidateAPI.updateCandidateInfo(submitData);
+      if (response.data.Success) {
+        setSnackbar({
+          open: true,
+          message: "Profile updated successfully!",
+          severity: "success"
+        });
+        navigate('/home');
+      } else if (response.data.Error) {
+        setSnackbar({
+          open: true,
+          message: response.data.Error,
+          severity: "error"
+        });
       }
     } catch (error) {
-      setSnackbar({ open: true, message: 'Failed to update profile.', severity: 'error' });
+      console.error('Error updating profile:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.Error || "Failed to update profile. Please try again later.",
+        severity: "error"
+      });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  if (loading || !candidate) {
+  if (loading) {
     return (
       <Container maxWidth="sm" sx={{ mt: 4 }}>
-        <Typography>Loading...</Typography>
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+          <CircularProgress />
+        </Box>
+      </Container>
+    );
+  }
+
+  if (!candidate) {
+    return (
+      <Container maxWidth="sm" sx={{ mt: 4 }}>
+        <Typography variant="h6" color="error">Profile not found.</Typography>
       </Container>
     );
   }
@@ -229,7 +321,7 @@ export default function CandidateProfile() {
             <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
               Preferred Careers
             </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2, justifyContent: 'center' }}>
               {(candidate.preferred_career_types || []).map((careerName) => (
                 <Chip
                   key={careerName}

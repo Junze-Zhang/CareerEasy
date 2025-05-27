@@ -1,4 +1,5 @@
 from http.client import responses
+import json
 from random import randint
 import random
 from smtplib import SMTPException
@@ -26,7 +27,7 @@ from CareerEasy.constants import *
 from CareerEasyBackend.Candidate.models import *
 from CareerEasyBackend.initDB import S3_BASE_URL
 from CareerEasyBackend.models import *
-from CareerEasyBackend.careereasy_utils import am_i_a_match, extract_from_resume, update_ai_highlights
+from CareerEasyBackend.careereasy_utils import am_i_a_match, anonymize_resume, extract_from_resume, update_ai_highlights
 
 
 @extend_schema(
@@ -184,7 +185,9 @@ def upload_resume(request):
 
     # Update candidate's resume field with the file path
     candidate.resume = resume_text
+    candidate.anonymous_resume = anonymize_resume(resume_text)
     candidate.standardized_resume = STANDARDIZE_FN(resume_text)
+    candidate.standardized_anonymous_resume = STANDARDIZE_FN(candidate.anonymous_resume)
     candidate.save()
 
     return JsonResponse({"Success": "Resume uploaded successfully."}, status=200)
@@ -258,7 +261,6 @@ def update_candidate_info(request):
     middle_name = data.get('middle_name')
     last_name = data.get('last_name')
     email = data.get('email')
-    work_email = data.get('work_email')
     phone = data.get('phone')
     location = data.get('location')
     country = data.get('country')
@@ -269,9 +271,8 @@ def update_candidate_info(request):
     for field in ["first_name", 
                   "middle_name", 
                   "last_name", 
-                  "email", 
-                  "work_email", 
-                  "phone", 
+                  "phone",
+                  "email",
                   "location", 
                   "country", 
                   "experience_months",
@@ -279,7 +280,7 @@ def update_candidate_info(request):
                   "highest_education"]:
         if field in data:
             setattr(candidate, field, data.get(field))
-    if preferred_career_types is not None:
+    if preferred_career_types is not None and len(preferred_career_types) > 0:
         candidate.preferred_career_types.clear()
         for career_id in preferred_career_types:
             career = Career.objects.filter(id=career_id).first()
@@ -287,7 +288,7 @@ def update_candidate_info(request):
                 pass  # TODO: support adding new career types
             else:
                 candidate.preferred_career_types.add(career)
-    if skills is not None:
+    if skills is not None and len(skills) > 0:
         candidate.skills = skills
         candidate.standardized_skills = [STANDARDIZE_FN(skill) for skill in candidate.skills]
     if highest_education is not None:
@@ -369,10 +370,33 @@ def log_in(request):
         return JsonResponse({"Error": "Invalid username or password."}, status=401)
 
     response = JsonResponse({"Success": "Signed in successfully."}, status=200)
-    response.set_cookie(
-        key='candidate_id', value=account.candidate.id, max_age=60 * 60 * 3)  # 3 hours
-    response.set_cookie(key='candidate_account_id',
-                        value=account.id, max_age=60 * 60 * 3)  # 3 hours
+    
+    # Get the host from the request
+    host = request.get_host()
+    is_localhost = 'localhost' in host or '127.0.0.1' in host
+    
+    # Set cookies with proper attributes
+    cookie_options = {
+        'key': 'candidate_id',
+        'value': account.candidate.id,
+        'max_age': 60 * 60 * 3,  # 3 hours
+        'samesite': 'Lax',  # Changed from 'None' to 'Lax' for better compatibility
+    }
+    
+    # Only set domain and secure for production
+    if not is_localhost:
+        cookie_options.update({
+            'domain': '.career-easy.com',
+            'secure': True,
+        })
+    
+    response.set_cookie(**cookie_options)
+    
+    # Set candidate_account_id cookie with same options
+    cookie_options['key'] = 'candidate_account_id'
+    cookie_options['value'] = account.id
+    response.set_cookie(**cookie_options)
+    
     return response
 
 
@@ -387,8 +411,30 @@ def log_in(request):
 def log_out(request):
     response = JsonResponse(
         {"Success": "Signed out successfully."}, status=200)
-    response.delete_cookie('candidate_id')
-    response.delete_cookie('candidate_account_id')
+    
+    # Get the host from the request
+    host = request.get_host()
+    is_localhost = 'localhost' in host or '127.0.0.1' in host
+    
+    # Delete cookies with proper attributes
+    cookie_options = {
+        'key': 'candidate_id',
+        'samesite': 'Lax',
+    }
+    
+    # Only set domain and secure for production
+    if not is_localhost:
+        cookie_options.update({
+            'domain': '.career-easy.com',
+            'secure': True,
+        })
+    
+    response.delete_cookie(**cookie_options)
+    
+    # Delete candidate_account_id cookie with same options
+    cookie_options['key'] = 'candidate_account_id'
+    response.delete_cookie(**cookie_options)
+    
     return response
 
 

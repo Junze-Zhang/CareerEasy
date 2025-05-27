@@ -81,8 +81,7 @@ COMPANY_CAREERS = {
         "office clerk"
     ]
 }
-# COMPANY_CAREERS_WEIGHTS = [10, 5, 7, 5, 7, 5, 6, 16]
-COMPANY_CAREERS_WEIGHTS = [0,0,0,0,0,0,0,1]
+COMPANY_CAREERS_WEIGHTS = [10, 5, 7, 5, 7, 5, 6, 16]
 FAKE_COMPANY_NAMES = {
     "IT": [
         " Tech Solutions",

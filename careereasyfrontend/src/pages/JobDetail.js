@@ -25,19 +25,50 @@ export default function JobDetail() {
     severity: 'info'
   });
 
-  useEffect(() => {
-    const fetchJob = async () => {
+  const fetchJobDetails = async () => {
       setLoading(true);
       try {
         const response = await candidateAPI.getJobDetails(jobId);
-        const data = await response.json();
-        setJob(data);
+      setJob(response.data);
       } catch (error) {
-        setJob(null);
-      }
+      console.error('Error fetching job details:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.Error || "Failed to fetch job details. Please try again later.",
+        severity: "error"
+      });
+    } finally {
       setLoading(false);
+    }
     };
-    fetchJob();
+
+  const handleCheckFit = async () => {
+    // Check for candidate_id cookie
+    const cookies = document.cookie.split(';').map(c => c.trim());
+    const candidateIdCookie = cookies.find(c => c.startsWith('candidate_id='));
+    if (!candidateIdCookie) {
+      setSnackbar({
+        open: true,
+        message: "Please sign in to use this feature.",
+        severity: "warning"
+      });
+      return;
+    }
+    setFitDialogOpen(true);
+    setFitLoading(true);
+    setFitResult('');
+    try {
+      const response = await candidateAPI.checkFit({ job_id: jobId });
+      setFitResult(response.data.Success || "No response from AI.");
+    } catch (error) {
+      console.error('Error checking job fit:', error);
+      setFitResult(error.response?.data?.Error || "An error occurred while contacting the AI. Please try again later.");
+    }
+    setFitLoading(false);
+  };
+
+  useEffect(() => {
+    fetchJobDetails();
   }, [jobId]);
 
   if (loading) {
@@ -72,13 +103,11 @@ export default function JobDetail() {
         />
         <Box>
           <Typography variant="h5" fontWeight={700}>{job.title}</Typography>
-          <Link
-            href={`/company/${job.company__id}`}
-            underline="hover"
+          <Typography
             sx={{ fontWeight: 500, fontSize: 18, mr: 2 }}
           >
             {job.company__name}
-          </Link>
+          </Typography>
           <Typography variant="body2" color="text.secondary">
             {job.company__location}, {job.company__country}
           </Typography>
@@ -95,30 +124,7 @@ export default function JobDetail() {
           color="primary"
           fullWidth
           sx={{ py: 2, fontSize: 18, fontWeight: 600, borderRadius: 2 }}
-          onClick={async () => {
-            // Check for candidate_id cookie
-            const cookies = document.cookie.split(';').map(c => c.trim());
-            const candidateIdCookie = cookies.find(c => c.startsWith('candidate_id='));
-            if (!candidateIdCookie) {
-              setSnackbar({
-                open: true,
-                message: "Please sign in to use this feature.",
-                severity: "warning"
-              });
-              return;
-            }
-            setFitDialogOpen(true);
-            setFitLoading(true);
-            setFitResult('');
-            try {
-              const response = await candidateAPI.amIAGoodFit(jobId);
-              const data = await response.json();
-              setFitResult(data.Success || "No response from AI.");
-            } catch (error) {
-              setFitResult("An error occurred while contacting the AI. Please try again later.");
-            }
-            setFitLoading(false);
-          }}
+          onClick={handleCheckFit}
         >
           Am I a good fit for this job?
         </Button>

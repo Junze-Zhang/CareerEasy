@@ -53,10 +53,14 @@ export default function CandidateSignUp() {
         const fetchCareerTypes = async () => {
             try {
                 const response = await generalAPI.getCareers();
-                const data = await response.json();
-                setCareerTypes(data);
+                setCareerTypes(response.data);
             } catch (error) {
                 console.error('Error fetching career types:', error);
+                setSnackbar({
+                    open: true,
+                    message: error.response?.data?.Error || "Failed to fetch career types. Please refresh the page.",
+                    severity: "error"
+                });
             }
         };
         fetchCareerTypes();
@@ -103,36 +107,28 @@ export default function CandidateSignUp() {
         };
         try {
             const response = await candidateAPI.signup(dataToSend);
-            const data = await response.json();
-            if (response.ok && data.Success) {
+            
+            if (response.data.Success) {
                 setSnackbar({
                     open: true,
-                    message: "Your account has been successfully created.",
+                    message: "Sign up successful! Please log in.",
                     severity: "success"
                 });
-                setTimeout(() => navigate('/login'), 2000); // Redirect after short delay
-            }
-            else if (data.Error) {
+                navigate('/login');
+            } else if (response.data.Error) {
                 setSnackbar({
                     open: true,
-                    message: data.Error,
-                    severity: "error"
-                });
-            }
-            else {
-                setSnackbar({
-                    open: true,
-                    message: "unknown error occurred",
+                    message: response.data.Error,
                     severity: "error"
                 });
             }
         } catch (error) {
+            console.error('Error during signup:', error);
             setSnackbar({
                 open: true,
-                message: "A server error occurred. Please try again later.",
+                message: error.response?.data?.Error || "A server error occurred. Please try again later.",
                 severity: "error"
             });
-            console.error('Error during signup:', error);
         }
     };
 

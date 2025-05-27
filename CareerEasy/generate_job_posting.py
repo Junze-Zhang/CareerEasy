@@ -1,6 +1,6 @@
 import os
 import django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'CareerEasy.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'CareerEasy.settings.prod')
 django.setup()
 
 import datetime

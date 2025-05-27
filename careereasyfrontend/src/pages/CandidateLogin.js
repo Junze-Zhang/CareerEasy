@@ -43,27 +43,47 @@ export default function CandidateLogin() {
         e.preventDefault();
         try {
             const response = await candidateAPI.login(formData);
-            const data = await response.json();
-            if (response.ok && data.Success) {
+            
+            // Debug: Log the response
+            console.log('Login response:', response);
+            console.log('Cookies after login:', document.cookie);
+
+            if (response.data.Success) {
                 setSnackbar({
                     open: true,
                     message: "Login successful!",
                     severity: "success"
                 });
-                // Redirect to candidate home or upload resume page after a short delay
-                // Check if candidate has uploaded resume
-                const candidateId = document.cookie.split('; ').find(row => row.startsWith('candidate_id=')).split('=')[1];
-                const candidateInfo = await candidateAPI.candidateInfo(candidateId);
-                const candidateInfoData = await candidateInfo.json();
-                if (response.ok && candidateInfoData.resume === null) {
-                    setTimeout(() => navigate('/upload'), 1500);
-                } else {
-                    setTimeout(() => navigate('/home'), 1500);
+
+                // Get candidate ID from cookie immediately
+                const cookies = document.cookie.split(';').map(c => c.trim());
+                console.log('Parsed cookies:', cookies);
+                const candidateIdCookie = cookies.find(c => c.startsWith('candidate_id='));
+                console.log('Found cookie:', candidateIdCookie);
+                const candidateId = candidateIdCookie ? candidateIdCookie.split('=')[1] : null;
+                console.log('Extracted candidate ID:', candidateId);
+
+                if (!candidateId) {
+                    setSnackbar({
+                        open: true,
+                        message: "Login failed: No session cookie received",
+                        severity: "error"
+                    });
+                    return;
                 }
-            } else if (data.Error) {
+
+                // Check if candidate has uploaded resume
+                const candidateInfo = await candidateAPI.candidateInfo(candidateId);
+                
+                if (candidateInfo.data.resume === null) {
+                    navigate('/upload');
+                } else {
+                    navigate('/home');
+                }
+            } else if (response.data.Error) {
                 setSnackbar({
                     open: true,
-                    message: data.Error,
+                    message: response.data.Error,
                     severity: "error"
                 });
             } else {
@@ -74,12 +94,12 @@ export default function CandidateLogin() {
                 });
             }
         } catch (error) {
+            console.error('Error during login:', error);
             setSnackbar({
                 open: true,
-                message: "A server error occurred. Please try again later.",
+                message: error.response?.data?.Error || "A server error occurred. Please try again later.",
                 severity: "error"
             });
-            console.error('Error during login:', error);
         }
     };
 

@@ -6,8 +6,8 @@ from typing import Optional
 from datetime import timedelta
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.db.models import Q, F, CharField, Value
-from django.db.models.functions import Concat
+from django.db.models import Q, F, CharField, Value, JSONField
+from django.db.models.functions import Concat, Cast
 from django.shortcuts import get_object_or_404, redirect
 from django.template import loader
 from django.utils.timezone import now
@@ -17,6 +17,7 @@ from rest_framework.decorators import api_view
 from bcrypt import gensalt, checkpw, hashpw
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
+from django.core.cache import cache
 
 from CareerEasy.constants import *
 from CareerEasyBackend.careereasy_utils import natural_language_to_query, rank_candidates
@@ -403,21 +404,28 @@ def get_candidates(request):
     page = request.GET.get('page', 1)
     page_size = request.GET.get('page_size', 10)
     candidates = Paginator(Candidate.objects
-                           .annotate(
-                               name=Concat('first_name', Value(' '), 'last_name', output_field=CharField())
-                           )
+                           .order_by('-updated_at', '-created_at')
                            .values('id',
-                                   'name',
+                                   'first_name',
+                                   'middle_name',
+                                   'last_name',
                                    'title',
                                    'location',
                                    'country',
                                    'profile_pic',
-                                   'ai_highlights',
-                                   'experience_months'),
+                                   'experience_months',
+                                   'skills',
+                                   'ai_highlights'),
                            page_size)
     page_obj = candidates.page(page)
+    candidate_list = list(page_obj)
+    for candidate in candidate_list:
+        candidate['name'] = candidate['first_name'] + " " + (candidate['middle_name'][0]+". " if candidate['middle_name'] else "") + candidate['last_name']
+        del candidate['first_name']
+        del candidate['middle_name']
+        del candidate['last_name']
     return JsonResponse({
-        "items": list(page_obj),
+        "items": candidate_list,
         "has_next": page_obj.has_next(),
         "has_previous": page_obj.has_previous(),
         "total_pages": candidates.num_pages,
@@ -450,14 +458,19 @@ def natural_language_query(request):
     existing_query = Query.objects.filter(
         standardized_query=standardized_query).first()
     if existing_query is not None:
-        return JsonResponse(existing_query.query_response, status=200)
+        ai_query = existing_query.query_response
+        ai_query['query_id'] = existing_query.id
+        return JsonResponse(ai_query, status=200)
 
     try:
         ai_query = natural_language_to_query(query)
         new_query = Query(
             query=query, standardized_query=standardized_query, query_response=ai_query)
         new_query.save()
+        ai_query['query_id'] = new_query.id
     except Exception as e:
+        if settings.DEBUG:
+            raise e
         return JsonResponse({"Error": str(e)}, status=400)
     return JsonResponse(ai_query, status=200)
 
@@ -492,7 +505,9 @@ def get_ranked_candidates(request):
     try:
         page = int(request.GET.get('page', 1))
         page_size = int(request.GET.get('page_size', 10))
-    except ValueError:
+    except ValueError as e:
+        if settings.DEBUG:
+            raise e
         return JsonResponse({"Error": "Invalid page or page_size parameters"}, status=400)
         
     data = request.data
@@ -501,39 +516,53 @@ def get_ranked_candidates(request):
     preferred_title_keywords = data.get('preferred_title_keywords')
     high_priority_keywords = data.get('high_priority_keywords')
     low_priority_keywords = data.get('low_priority_keywords')
+    query_id = str(data.get('query_id')).replace("-", "")
+    
+    # Try to get cached results from Redis
+    cache_key = f"ranked_results_{query_id}"
+    ranked_candidates = cache.get(cache_key)
     try:
-        ranked_candidates = rank_candidates(
-            query={
-                "minimal_years_of_experience": minimal_years_of_experience,
-                "maximal_years_of_experience": maximal_years_of_experience,
-                "preferred_title_keywords": preferred_title_keywords,
-                "high_priority_keywords": high_priority_keywords,
-                "low_priority_keywords": low_priority_keywords
-            },
-            candidates=Candidate.objects.all()
-        )
-        ranked_candidates = [{
-            "id": candidate.id,
-            "name": candidate.first_name + " " + candidate.last_name,
-            "title": candidate.title,
-            "location": candidate.location,
-            "country": candidate.country,
-            "profile_pic": candidate.profile_pic,
-            "ai_highlights": candidate.ai_highlights,
-            "experience_months": candidate.experience_months,
-            "match_score": score
-        } for candidate, score in ranked_candidates]
+        if ranked_candidates is not None:
+            ranked_candidates = json.loads(ranked_candidates)
+        else:
+            ranked_candidates = rank_candidates(
+                query={
+                    "minimal_years_of_experience": minimal_years_of_experience,
+                    "maximal_years_of_experience": maximal_years_of_experience,
+                    "preferred_title_keywords": preferred_title_keywords,
+                    "high_priority_keywords": high_priority_keywords,
+                    "low_priority_keywords": low_priority_keywords
+                },
+                candidates=Candidate.objects.values('id',
+                                                    'first_name',
+                                                    'middle_name',
+                                                    'last_name',
+                                                    'title',
+                                                    'location',
+                                                    'country',
+                                                    'profile_pic',
+                                                    'ai_highlights',
+                                                    'standardized_anonymous_resume',
+                                                    'standardized_ai_highlights', 
+                                                    'standardized_skills',
+                                                    'standardized_title',
+                                                    'experience_months')
+            )
+            cache.set(cache_key, json.dumps(ranked_candidates), timeout=3600)  # Cache for 1 hour
+            
+        paginator = Paginator(ranked_candidates, page_size)
+        page_obj = paginator.page(page)
+        return JsonResponse({
+            "items": list(page_obj),
+            "has_next": page_obj.has_next(),
+            "has_previous": page_obj.has_previous(),
+            "total_pages": paginator.num_pages,
+            "current_page": page_obj.number
+        }, status=200)
     except Exception as e:
+        if settings.DEBUG:
+            raise e
         return JsonResponse({"Error": "Query failed with error: "+str(e)}, status=400)
-    paginator = Paginator(ranked_candidates, page_size)
-    page_obj = paginator.page(page)
-    return JsonResponse({
-        "items": list(page_obj),
-        "has_next": page_obj.has_next(),
-        "has_previous": page_obj.has_previous(),
-        "total_pages": paginator.num_pages,
-        "current_page": page_obj.number
-    }, status=200)
 
 
 @extend_schema(

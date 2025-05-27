@@ -30,26 +30,32 @@ export default function EmployerHome() {
   const [searchText, setSearchText] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const [latestQuery, setLatestQuery] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchCandidates = async () => {
       setLoading(true);
       try {
-        let data;
+        let response;
         if (latestQuery) {
-          const response = await employerAPI.getRankedCandidates(latestQuery, page);
-          data = await response.json();
+          response = await employerAPI.getRankedCandidates(latestQuery, page);
         } else {
-          const response = await employerAPI.getCandidates(page);
-          data = await response.json();
+          response = await employerAPI.getCandidates(page);
         }
-        setCandidates(data.items || []);
-        setTotalPages(data.total_pages || 1);
+        setCandidates(response.data.items || []);
+        setTotalPages(response.data.total_pages || 1);
       } catch (error) {
+        console.error('Error fetching candidates:', error);
         setCandidates([]);
-      }
+        setSnackbar({
+          open: true,
+          message: error.response?.data?.Error || "Failed to fetch candidates. Please try again later.",
+          severity: "error"
+        });
+      } finally {
       setLoading(false);
+      }
     };
     fetchCandidates();
   }, [page, latestQuery]);
@@ -62,15 +68,20 @@ export default function EmployerHome() {
     setSearchLoading(true);
     const minLoadingPromise = new Promise(res => setTimeout(res, 3000));
     try {
-      const queryResponse = await employerAPI.naturalLanguageQuery(searchText);
-      const query = await queryResponse.json();
-      setLatestQuery(query);
+      const response = await employerAPI.naturalLanguageQuery(searchText);
+      setLatestQuery(response.data);
       setPage(1);
       await minLoadingPromise;
     } catch (error) {
-      // handle error
-    }
+      console.error('Error processing search query:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.Error || "Failed to process search query. Please try again later.",
+        severity: "error"
+      });
+    } finally {
     setSearchLoading(false);
+    }
   };
 
   return (
@@ -89,8 +100,7 @@ export default function EmployerHome() {
             }}
         >
             <Typography variant="body2" fontWeight="bold">
-                ⚠️ Tech Demo Disclaimer: This is a demonstration with very limited security features. 
-                Please do not enter sensitive personal information. All data are AI generated for demonstration purposes only.
+                ⚠️ Disclaimer: Contains AI generated data for demonstration and testing purposes only.
             </Typography>
         </Box>
       {/* Logo at the top */}

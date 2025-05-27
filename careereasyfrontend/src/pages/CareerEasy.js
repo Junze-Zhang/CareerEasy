@@ -39,8 +39,7 @@ export default function CareerEasy() {
             }}
         >
             <Typography variant="body2" fontWeight="bold">
-                ⚠️ Tech Demo Disclaimer: This is a demonstration with very limited security features. 
-                Please do not enter sensitive personal information. All data are AI generated for demonstration purposes only.
+                ⚠️ Disclaimer: Contains AI generated data for demonstration and testing purposes only.
             </Typography>
         </Box>
         <Container maxWidth="md">

@@ -4,8 +4,11 @@ CareerEasy/resume
 careereasyfrontend/node_modules
 
 .debug
-credentials.env
+*.env
 *.db
 node_modules
 .vscode
 .idea
+*.pem
+ssh-tunnel.sh
+keys/

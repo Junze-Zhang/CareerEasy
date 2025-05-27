@@ -46,6 +46,13 @@ export default function CandidateAISummary() {
 
   const [nextDialogOpen, setNextDialogOpen] = useState(false);
 
+  const [candidateInfo, setCandidateInfo] = useState({
+    experience_months: 0,
+    skills: [],
+    highest_education: '',
+    ai_highlights: []
+  });
+
   // Parse experience into years and months
   function parseExperience(expMonths) {
     const years = Math.floor(expMonths / 12);
@@ -58,22 +65,38 @@ export default function CandidateAISummary() {
     const fetchCandidateInfo = async () => {
       setLoading(true);
       try {
-        // Get candidate id from cookie
-        const cookies = document.cookie.split(';').map(c => c.trim());
-        const candidateIdCookie = cookies.find(c => c.startsWith('candidate_id='));
-        const candidateId = candidateIdCookie ? candidateIdCookie.split('=')[1] : null;
+        // Get candidate id from cookie - fix cookie parsing
+        const cookies = document.cookie.split(';');
+        const candidateIdCookie = cookies.find(c => c.trim().startsWith('candidate_id='));
+        const candidateId = candidateIdCookie ? candidateIdCookie.trim().split('=')[1] : null;
+        
         if (!candidateId) {
           setSnackbar({ open: true, message: 'Please sign in to view your AI summary.', severity: 'error' });
           navigate('/');
           return;
         }
+
         const response = await candidateAPI.candidateInfo(candidateId);
-        const data = await response.json();
+        if (response.status !== 200) {
+          setSnackbar({ open: true, message: 'Session expired. Please sign in again.', severity: 'error' });
+          navigate('/');
+          return;
+        }
+
+        const data = response.data;
         setExperience(parseExperience(data.experience_months));
         setHighestEducation(data.highest_education || '');
         setSkills(data.skills || []);
         setAiHighlights(data.highlights || []);
+        setCandidateInfo(prev => ({
+          ...prev,
+          experience_months: data.experience_months,
+          skills: data.skills,
+          highest_education: data.highest_education,
+          ai_highlights: data.highlights
+        }));
       } catch (error) {
+        console.error('Error fetching candidate info:', error);
         setSnackbar({ open: true, message: 'Failed to load AI summary.', severity: 'error' });
       }
       setLoading(false);
@@ -84,19 +107,35 @@ export default function CandidateAISummary() {
 
   // Handlers for editing experience/education
   const handleEditSave = () => {
+    const totalMonths = (parseInt(experience.years) * 12) + parseInt(experience.months);
+    setCandidateInfo(prev => ({
+      ...prev,
+      experience_months: totalMonths,
+      highest_education: highestEducation
+    }));
     setEditDialogOpen(false);
     setInfoChanged(true);
   };
 
   // Skills handlers
   const handleRemoveSkill = (skillToRemove) => {
-    setSkills(skills.filter(skill => skill !== skillToRemove));
+    const newSkills = skills.filter(skill => skill !== skillToRemove);
+    setSkills(newSkills);
+    setCandidateInfo(prev => ({
+      ...prev,
+      skills: newSkills
+    }));
     setInfoChanged(true);
   };
 
   const handleAddSkill = () => {
     if (newSkill && !skills.includes(newSkill)) {
-      setSkills([...skills, newSkill]);
+      const newSkills = [...skills, newSkill];
+      setSkills(newSkills);
+      setCandidateInfo(prev => ({
+        ...prev,
+        skills: newSkills
+      }));
       setNewSkill('');
       setInfoChanged(true);
     }
@@ -108,35 +147,86 @@ export default function CandidateAISummary() {
     setLoading(true);
     try {
       const response = await candidateAPI.updateHighlights({ custom_prompt: customPrompt });
-      const data = await response.json();
-      setAiHighlights(data.highlights || []);
+      if (response.status === 200) {
+        setAiHighlights(response.data.highlights || []);
       setSnackbar({ open: true, message: 'AI highlights regenerated!', severity: 'success' });
+      } else {
+        throw new Error(response.data?.Error || 'Failed to regenerate highlights');
+      }
     } catch (error) {
-      setSnackbar({ open: true, message: 'Failed to regenerate highlights.', severity: 'error' });
+      setSnackbar({ 
+        open: true, 
+        message: error.response?.data?.Error || 'Failed to regenerate highlights.', 
+        severity: 'error' 
+      });
     }
     setLoading(false);
   };
 
-  // Submit updated info
-  const handleSubmit = async () => {
+  const handleExtractInfo = async () => {
     setLoading(true);
     try {
-      const infoData = {
-        experience_months: Number(experience.years) * 12 + Number(experience.months),
-        highest_education: highestEducation,
-        skills: skills
-      };
-      const response = await candidateAPI.updateInfo(infoData);
-      if (response.ok) {
-        setSnackbar({ open: true, message: 'Profile updated successfully!', severity: 'success' });
-        setInfoChanged(false);
+      const response = await candidateAPI.extractCandidateInfo();
+      if (response.status === 200) {
+        setSnackbar({
+          open: true,
+          message: "AI analysis completed successfully!",
+          severity: "success"
+        });
+        // Update the state with the extracted info
+        setExperience(parseExperience(response.data.experience));
+        setHighestEducation(response.data.highest_education || '');
+        setSkills(response.data.skills || []);
+        setAiHighlights(response.data.ai_highlights || []);
+        setCandidateInfo(prev => ({
+          ...prev,
+          experience_months: response.data.experience,
+          skills: response.data.skills,
+          highest_education: response.data.highest_education,
+          ai_highlights: response.data.ai_highlights
+        }));
       } else {
-        setSnackbar({ open: true, message: 'Failed to update profile.', severity: 'error' });
+        throw new Error(response.data?.Error || 'Failed to analyze resume');
       }
     } catch (error) {
-      setSnackbar({ open: true, message: 'Failed to update profile.', severity: 'error' });
+      console.error('Error extracting candidate info:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.Error || "Failed to analyze resume. Please try again later.",
+        severity: "error"
+      });
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleUpdateInfo = async () => {
+    setLoading(true);
+    try {
+      const response = await candidateAPI.updateCandidateInfo(candidateInfo);
+      if (response.status === 200) {
+        setSnackbar({
+          open: true,
+          message: "Profile updated successfully!",
+          severity: "success"
+        });
+        // Only navigate after successful update
+        setTimeout(() => {
+          navigate('/home');
+        }, 1500); // Give user time to see the success message
+      } else {
+        throw new Error(response.data?.Error || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Error updating candidate info:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.Error || "Failed to update profile. Please try again later.",
+        severity: "error"
+      });
+    } finally {
     setLoading(false);
+    }
   };
 
   return (
@@ -230,7 +320,7 @@ export default function CandidateAISummary() {
         <Button
           variant="contained"
           color="primary"
-          onClick={handleSubmit}
+          onClick={handleUpdateInfo}
           disabled={!infoChanged || loading}
         >
           Submit
@@ -355,7 +445,7 @@ export default function CandidateAISummary() {
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
           <CircularProgress sx={{ mb: 3 }} />
           <Typography variant="h6" align="center" sx={{ mb: 1 }}>
-            ✨ Regenerating Your Highlights with Reasoning AI...
+            ✨ Generating Your Highlights with Reasoning AI...
           </Typography>
         </DialogContent>
       </Dialog>

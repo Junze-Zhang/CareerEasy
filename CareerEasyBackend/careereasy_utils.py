@@ -9,10 +9,13 @@ import json
 import os
 import re
 from typing import Union, Dict, Tuple
-
 import numpy as np
 from openai import OpenAI
 from django.db.models import QuerySet
+from presidio_analyzer import AnalyzerEngine
+from presidio_anonymizer import AnonymizerEngine
+from presidio_anonymizer.entities import OperatorConfig
+
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "CareerEasy.settings")
 
@@ -58,9 +61,7 @@ def extract_from_resume(candidate: Candidate) -> dict:
         "highest_education": None,
     }
     today_month = datetime.now().strftime("%B %Y")
-    prompt_exp = PROMPT_CANDIDATE_EXP.format(name=candidate.first_name + " " + candidate.last_name,
-                                             career=candidate.preferred_career_types.first().name,
-                                             resume=candidate.resume,
+    prompt_exp = PROMPT_CANDIDATE_EXP.format(resume=candidate.anonymous_resume,
                                              today_month=today_month)
     messages = [{"role": "user", "content": prompt_exp}]
     response = llm_request(llm_client,
@@ -120,9 +121,7 @@ def update_ai_highlights(candidate: Candidate, custom_prompt: str) -> dict:
         "DEEPSEEK_API_KEY"), base_url=DEEPSEEK_API_URL)
     prompt = PROMPT_CANDIDATE_AI_HIGHLIGHTS_CUSTOMIZE.format(
         num_highlights=NUM_AI_HIGHLIGHTS,
-        name=candidate.first_name + " " + candidate.last_name,
-        career=candidate.preferred_career_types.first().name,
-        resume=candidate.resume,
+        resume=candidate.anonymous_resume,
         candidate_prompt=custom_prompt
     )
     if settings.DEBUG:
@@ -264,14 +263,14 @@ def natural_language_to_query(natural_language_query: str) -> dict:
 #     return candidates
 
 
-def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) -> Union[Dict, float]:
+def _match_score(query: dict, candidate: Dict, return_raw: bool = False) -> Union[Dict, float]:
     experience_score = 0
     title_score = 0
     skills_score = [0, 0]
     ai_highlights_score = [0, 0]
     resume_score = [0, 0]
 
-    candidate_exp_months = candidate.experience_months
+    candidate_exp_months = candidate['experience_months']
     min_months = query.get('minimal_years_of_experience', 0) * 12
     max_months = query.get('maximal_years_of_experience', 100) * 12
     if min_months > max_months:
@@ -297,23 +296,23 @@ def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) ->
     # Title matching score: if any of preferred title matches the candidate, they get a score of 100
     query_preferred_title_keywords = query.get('preferred_title_keywords', [])
     for keyword in query_preferred_title_keywords:
-        if keyword in candidate.standardized_title:
+        if keyword in candidate['standardized_title']:
             title_score = 100
             break
 
     # Keyword-matching scores are the recall percentages of every preferred keyword in candidate data
     query_high_priority_keywords = query.get('high_priority_keywords', [])
     query_low_priority_keywords = query.get('low_priority_keywords', [])
-    if candidate.standardized_skills:
+    if candidate['standardized_skills']:
         for keyword in query_high_priority_keywords:
-            if keyword in candidate.standardized_skills:
+            if keyword in candidate['standardized_skills']:
                 skills_score[0] += 1
-        if candidate.standardized_ai_highlights:
-            for highlight in candidate.standardized_ai_highlights:
+        if candidate['standardized_ai_highlights']:
+            for highlight in candidate['standardized_ai_highlights']:
                 if keyword in highlight:
                     ai_highlights_score[0] += 1
-        if candidate.standardized_resume:
-            if keyword in candidate.standardized_resume:
+        if candidate['standardized_anonymous_resume']:
+            if keyword in candidate['standardized_anonymous_resume']:
                 resume_score[0] += 1
     skills_score[0] = skills_score[0] / \
         len(query_high_priority_keywords) * \
@@ -326,15 +325,15 @@ def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) ->
         100 if query_high_priority_keywords else 0
 
     for keyword in query_low_priority_keywords:
-        if candidate.standardized_skills:
-            if keyword in candidate.standardized_skills:
+        if candidate['standardized_skills']:
+            if keyword in candidate['standardized_skills']:
                 skills_score[1] += 1
-        if candidate.standardized_ai_highlights:
-            for highlight in candidate.standardized_ai_highlights:
+        if candidate['standardized_ai_highlights']:
+            for highlight in candidate['standardized_ai_highlights']:
                 if keyword in highlight:
                     ai_highlights_score[1] += 1
-        if candidate.standardized_resume:
-            if keyword in candidate.standardized_resume:
+        if candidate['standardized_anonymous_resume']:
+            if keyword in candidate['standardized_anonymous_resume']:
                 resume_score[1] += 1
     skills_score[1] = skills_score[1] / \
         len(query_low_priority_keywords) * \
@@ -370,10 +369,13 @@ def _match_score(query: dict, candidate: Candidate, return_raw: bool = False) ->
     ]))
 
 
-def rank_candidates(query: dict, candidates: list[Candidate]) -> list[Tuple[Candidate, float]] | QuerySet[Candidate]:
-    candidates_with_score = [(candidate, _match_score(
-        query, candidate)) for candidate in candidates]
-    return sorted(candidates_with_score, key=lambda x: x[1], reverse=True)
+def rank_candidates(query: dict, candidates: list[Dict]) -> list[Tuple[Dict, float]]:
+    candidates_with_score = [{**candidate, 
+                              "id": str(candidate['id']), 
+                              "name": candidate['first_name'] + " " + (candidate['middle_name'][0]+". " if candidate['middle_name'] else "") + candidate['last_name'],
+                              "match_score": _match_score(query, candidate)} 
+                              for candidate in candidates]
+    return sorted(candidates_with_score, key=lambda x: x['match_score'], reverse=True)
 
 
 def am_i_a_match(candidate: Candidate, job: JobPosting) -> bool:
@@ -385,10 +387,8 @@ def am_i_a_match(candidate: Candidate, job: JobPosting) -> bool:
         job_title=job.title,
         job_description=job.description,
         candidate_title=candidate.title,
-        highlights="\n".join(candidate.ai_highlights)
-                    if isinstance(candidate.ai_highlights, list)
-                    else candidate.ai_highlights,
-        resume=candidate.resume
+        highlights="\n".join(candidate.ai_highlights),
+        resume=candidate.anonymous_resume
     )
     if settings.DEBUG:
         print(prompt)
@@ -401,6 +401,80 @@ def am_i_a_match(candidate: Candidate, job: JobPosting) -> bool:
     if "error" in response:
         raise ValueError(json.loads(response)["error"])
     return response
+
+def anonymize_resume(resume: str) -> str:
+    analyzer = AnalyzerEngine()
+    anonymizer = AnonymizerEngine()
+    resume_lower = resume.lower()
+    if "skills" in resume_lower:
+        skills_idx = resume_lower.index("skills")
+    else:
+        skills_idx = 2147483647
+    if "experience" in resume_lower:
+        experience_idx = resume_lower.index("experience")
+    else:
+        experience_idx = 2147483647
+    if "project" in resume_lower:
+        project_idx = resume_lower.index("project")
+    else:
+        project_idx = 2147483647
+    if "education" in resume_lower:
+        education_idx = resume_lower.index("education")
+    else:
+        education_idx = 2147483647
+    personal_info_idx = min(skills_idx, experience_idx, project_idx, education_idx)
+    resume_personal_info = resume[:personal_info_idx]
+    resume_other = resume[personal_info_idx:]
+    results = analyzer.analyze(
+        text=resume_personal_info.lower(),
+            entities=[
+                "PERSON",
+                "EMAIL_ADDRESS",
+                "PHONE_NUMBER",
+                "SSN",
+                "CREDIT_CARD",
+                "URL",
+                "LOCATION"
+            ],
+        language='en',
+        allow_list=open("technical_terms.txt", "r").read().split(",")
+    )
+    anonymized_personal_info = anonymizer.anonymize(
+        text=resume_personal_info,
+        analyzer_results=results,
+        operators={
+            "PHONE_NUMBER": OperatorConfig(
+                "replace",
+                {"new_value": "XXX-XXX-XXXX"}
+            ),
+            "EMAIL_ADDRESS": OperatorConfig(
+                "replace",
+                {"new_value": "<email>"}
+            ),
+            "PERSON": OperatorConfig(
+                "replace",
+                {"new_value": "<name>"}
+            ),
+            "URL": OperatorConfig(
+                "replace",
+                {"new_value": "<url>"}
+            ),
+            "LOCATION": OperatorConfig(
+                "replace",
+                {"new_value": "Anytown, Anycountry"}
+            ),
+            "CREDIT_CARD": OperatorConfig(
+                "replace",
+                {"new_value": "XXXX-XXXX-XXXX-XXXX"}
+            ),
+            "SSN": OperatorConfig(
+                "replace",
+                {"new_value": "XXX-XX-XXXX"}
+            )
+        }
+    )
+    
+    return anonymized_personal_info.text + resume_other
 
 
 if __name__ == "__main__":

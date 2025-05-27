@@ -16,7 +16,7 @@ export default function Background() {
         overflow: 'hidden',
       }}
     >
-      {/* Repeating watermark pattern */}
+      {/* Repeating watermark pattern
       <Box
         sx={{
           position: 'absolute',
@@ -47,7 +47,7 @@ export default function Background() {
             WEBSITE IN DEVELOPMENT TECH DEMO ONLY
           </Typography>
         ))}
-      </Box>
+      </Box> */}
     </Box>
   );
 }

@@ -23,21 +23,44 @@ export default function CandidateHome() {
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
     const navigate = useNavigate();
 
-    useEffect(() => {
-        const fetchJobs = async () => {
+    const fetchJobs = async (page = 1) => {
             setLoading(true);
             try {
-                const response = await candidateAPI.getJobs(page);
-                const data = await response.json();
-                setJobs(data.items || []);
-                setTotalPages(data.total_pages || 1);
+            const response = await candidateAPI.getPostedJobs(page);
+            setJobs(response.data.items);
+            setTotalPages(response.data.total_pages);
+            setCurrentPage(response.data.current_page);
             } catch (error) {
-                setJobs([]);
-            }
+            console.error('Error fetching jobs:', error);
+            setSnackbar({
+                open: true,
+                message: error.response?.data?.Error || "Failed to fetch jobs. Please try again later.",
+                severity: "error"
+            });
+        } finally {
             setLoading(false);
-        };
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await candidateAPI.logout();
+            navigate('/login');
+        } catch (error) {
+            console.error('Error during logout:', error);
+            setSnackbar({
+                open: true,
+                message: error.response?.data?.Error || "Failed to logout. Please try again.",
+                severity: "error"
+            });
+        }
+    };
+
+    useEffect(() => {
         fetchJobs();
     }, [page]);
 
@@ -57,8 +80,7 @@ export default function CandidateHome() {
             }}
         >
             <Typography variant="body2" fontWeight="bold">
-                ⚠️ Tech Demo Disclaimer: This is a demonstration with very limited security features. 
-                Please do not enter sensitive personal information. All data are AI generated for demonstration purposes only.
+            ⚠️ Disclaimer: Contains AI generated data for demonstration and testing purposes only.
             </Typography>
         </Box>
             <Box
@@ -96,12 +118,7 @@ export default function CandidateHome() {
                         variant="contained"
                         color="primary"
                         startIcon={<LogoutIcon />}
-                        onClick={() => {
-                            // Call your logout API and redirect to login or landing page
-                            fetch(candidateAPI.logout()).then(() => {
-                                window.location.href = '/';
-                            });
-                        }}
+                        onClick={handleLogout}
                         sx={{ ml: 1 }}
                     >
                         Log out
@@ -191,8 +208,11 @@ export default function CandidateHome() {
                     <Box display="flex" justifyContent="center" mt={4}>
                         <Pagination
                             count={totalPages}
-                            page={page}
-                            onChange={(_, value) => setPage(value)}
+                            page={currentPage}
+                            onChange={(_, value) => {
+                                setPage(value);
+                                fetchJobs(value);
+                            }}
                             color="primary"
                         />
                     </Box>

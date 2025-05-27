@@ -41,8 +41,8 @@ export default function UploadResume() {
     formData.append('resume', file);
     try {
       const uploadResponse = await candidateAPI.uploadResume(formData);
-      if (!uploadResponse.ok) {
-        throw new Error("Failed to upload resume.");
+      if (uploadResponse.status !== 200) {
+        throw new Error(uploadResponse.data?.Error || "Failed to upload resume.");
       }
       // Step 2: Show analyzing popup and call aiExtract
       setSnackbar({
@@ -50,13 +50,12 @@ export default function UploadResume() {
         message: "✨ Analyzing your resume with Reasoning AI. This may take up to a few minutes...",
         severity: "info"
       });
-      const aiResponse = await candidateAPI.aiExtract();
-      if (!aiResponse.ok) {
-        throw new Error("Failed to analyze resume.");
+      const aiResponse = await candidateAPI.extractCandidateInfo();
+      if (aiResponse.status !== 200) {
+        throw new Error(aiResponse.data?.Error || "Failed to analyze resume.");
       }
       // Step 3: Redirect to ai summary page
-      const aiData = await aiResponse.json();
-      navigate('/ai-summary', { state: { aiSummary: aiData } });
+      navigate('/ai-summary', { state: { aiSummary: aiResponse.data } });
     } catch (error) {
       setSnackbar({
         open: true,
