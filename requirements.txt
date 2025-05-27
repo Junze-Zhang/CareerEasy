@@ -20,4 +20,6 @@ edc_constants
 django-extensions
 Werkzeug
 pyOpenSSL
+vercel
+boto3
 # python -m spacy download en_core_web_lg

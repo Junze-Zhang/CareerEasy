@@ -6,6 +6,7 @@ load_dotenv(BASE_DIR / 'credentials.env')
 
 DEBUG = False
 ALLOWED_HOSTS = [
+    'api.career-easy.com',
     'career-easy.com',
     'www.career-easy.com',
     'localhost',
@@ -40,6 +41,7 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://career-easy.com",
+    "https://career-easy-frontend.vercel.app"  # Add your Vercel domain
 ]
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -64,8 +66,8 @@ CORS_ALLOW_HEADERS = [
 # Cookie settings
 SESSION_COOKIE_SAMESITE = 'None'  # Required for cross-origin requests
 CSRF_COOKIE_SAMESITE = 'None'     # Required for cross-origin requests
-SESSION_COOKIE_DOMAIN = '.career-easy.com'  # Allow subdomains
-CSRF_COOKIE_DOMAIN = '.career-easy.com'     # Allow subdomains
+SESSION_COOKIE_DOMAIN = '.career-easy.com'  # Keep this to allow subdomains
+CSRF_COOKIE_DOMAIN = '.career-easy.com'     # Keep this to allow subdomains
 
 # Static and Media files
 STATIC_ROOT = BASE_DIR / 'staticfiles'
