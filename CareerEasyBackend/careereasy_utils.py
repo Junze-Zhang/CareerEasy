@@ -103,7 +103,7 @@ def extract_from_resume(candidate: Candidate) -> dict:
             os.makedirs(debug_dir)
         with open(os.path.join(debug_dir, f"{candidate.id}.txt"), "w") as f:
             f.write(f"Prompt: {prompt_exp}\n")
-            f.write(f"Reasoning: {response.reasoning_content}\n")
+            # f.write(f"Reasoning: {response.reasoning_content}\n")
             f.write(f"Response: {response.content}\n\n")
     response_json = json.loads(response.content)
     candidate_info["exp_month"] = response_json["experience_months"]
@@ -122,7 +122,7 @@ def extract_from_resume(candidate: Candidate) -> dict:
             os.makedirs(debug_dir)
         with open(os.path.join(debug_dir, f"{candidate.id}.txt"), "a") as f:
             f.write(f"Prompt: {PROMPT_CANDIDATE_SKILLS}\n")
-            f.write(f"Reasoning: {response.reasoning_content}\n")
+            # f.write(f"Reasoning: {response.reasoning_content}\n")
             f.write(f"Response: {response.content}\n\n")
     candidate_info["skills"] = json.loads(response.content)["skills"]
     messages.append({"role": "assistant", "content": response.content})
@@ -141,7 +141,7 @@ def extract_from_resume(candidate: Candidate) -> dict:
             os.makedirs(debug_dir)
         with open(os.path.join(debug_dir, f"{candidate.id}.txt"), "a") as f:
             f.write(f"Prompt: {prompt_ai_highlights}\n")
-            f.write(f"Reasoning: {response.reasoning_content}\n")
+            # f.write(f"Reasoning: {response.reasoning_content}\n")
             f.write(f"Response: {response.content}\n\n")
     candidate_info["ai_highlights"] = json.loads(response.content)[
         "highlights"]
