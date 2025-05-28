@@ -67,8 +67,10 @@ CORS_ALLOW_HEADERS = [
 # Cookie settings
 SESSION_COOKIE_SAMESITE = 'None'  # Required for cross-origin requests
 CSRF_COOKIE_SAMESITE = 'None'     # Required for cross-origin requests
-SESSION_COOKIE_DOMAIN = '.career-easy.com'  # Keep this to allow subdomains
-CSRF_COOKIE_DOMAIN = '.career-easy.com'     # Keep this to allow subdomains
+SESSION_COOKIE_DOMAIN = None      # Allow cookies for all domains
+CSRF_COOKIE_DOMAIN = None         # Allow cookies for all domains
+SESSION_COOKIE_SECURE = True      # Only send cookies over HTTPS
+CSRF_COOKIE_SECURE = True         # Only send cookies over HTTPS
 
 # Static and Media files
 STATIC_ROOT = BASE_DIR / 'staticfiles'
