@@ -92,7 +92,6 @@ def extract_from_resume(candidate: Candidate) -> dict:
     response = llm_request(llm_client,
                            messages=messages,
                            validate_fn=validate_exp,
-                           model="deepseek-reasoner",
                            return_raw=True)
     if not response:
         raise ValueError("Failed to extract experience from resume.")
@@ -114,7 +113,6 @@ def extract_from_resume(candidate: Candidate) -> dict:
     response = llm_request(llm_client,
                            messages=messages,
                            validate_fn=validate_skills,
-                           model="deepseek-reasoner",
                            return_raw=True)
     if not response:
         raise ValueError("Failed to extract skills from resume.")
@@ -134,7 +132,6 @@ def extract_from_resume(candidate: Candidate) -> dict:
     response = llm_request(llm_client,
                            messages=messages,
                            validate_fn=validate_ai_highlights,
-                           model="deepseek-reasoner",
                            return_raw=True)
     if not response:
         raise ValueError("Failed to extract highlights from resume.")
@@ -163,8 +160,7 @@ def update_ai_highlights(candidate: Candidate, custom_prompt: str) -> dict:
     messages = [{"role": "user", "content": prompt}]
     response = llm_request(llm_client,
                            messages=messages,
-                           validate_fn=validate_ai_highlights,
-                           model="deepseek-reasoner")
+                           validate_fn=validate_ai_highlights)
     if not response:
         raise ValueError("Failed to update ai highlights. Please try again later.")
     response = json.loads(response)
