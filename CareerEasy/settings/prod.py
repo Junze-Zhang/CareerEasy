@@ -39,10 +39,11 @@ DATABASES = {
 # CORS settings
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+    "https://www.career-easy.com",
     "https://career-easy.com",
     "https://careereasy-frontend.vercel.app",
-    "https://api.career-easy.com"
+    "https://api.career-easy.com",
+    "http://localhost:3000",  # (optional, for local dev)
 ]
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -67,8 +68,8 @@ CORS_ALLOW_HEADERS = [
 # Cookie settings
 SESSION_COOKIE_SAMESITE = 'None'  # Required for cross-origin requests
 CSRF_COOKIE_SAMESITE = 'None'     # Required for cross-origin requests
-SESSION_COOKIE_DOMAIN = None      # Allow cookies for all domains
-CSRF_COOKIE_DOMAIN = None         # Allow cookies for all domains
+SESSION_COOKIE_DOMAIN = ".career-easy.com"
+CSRF_COOKIE_DOMAIN = ".career-easy.com"
 SESSION_COOKIE_SECURE = True      # Only send cookies over HTTPS
 CSRF_COOKIE_SECURE = True         # Only send cookies over HTTPS
 
