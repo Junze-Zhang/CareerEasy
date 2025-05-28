@@ -403,7 +403,7 @@ def am_i_a_match(candidate: Candidate, job: JobPosting) -> bool:
     return response
 
 def anonymize_resume(resume: str) -> str:
-    analyzer = AnalyzerEngine()
+    analyzer = AnalyzerEngine(nlp_engine="spacy", models=["en_core_web_md"])
     anonymizer = AnonymizerEngine()
     resume_lower = resume.lower()
     if "skills" in resume_lower:
