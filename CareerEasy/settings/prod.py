@@ -41,7 +41,8 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://career-easy.com",
-    "https://career-easy-frontend.vercel.app"  # Add your Vercel domain
+    "https://careereasy-frontend.vercel.app",
+    "https://api.career-easy.com"
 ]
 CORS_ALLOW_METHODS = [
     'DELETE',
