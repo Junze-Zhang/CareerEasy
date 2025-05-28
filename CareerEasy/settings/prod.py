@@ -75,3 +75,5 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DJANGO_CRYPTO_FIELDS_KEY_PATH = 'keys/'
+
+print("The server is running in production mode")
