@@ -17,10 +17,14 @@ from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 import threading
+from concurrent.futures import ThreadPoolExecutor
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "CareerEasy.settings")
-
 
 django.setup()
 
@@ -29,6 +33,10 @@ nlp_configuration = {
     "nlp_engine_name": "spacy",
     "models": [{"lang_code": "en", "model_name": "en_core_web_md"}]
 }
+
+# Create a thread pool for anonymization tasks
+MAX_WORKERS = 3  # Adjust this based on your server's capacity
+anonymizer_thread_pool = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
 print("Loading NLP engine for Presidio anonymizer...")
 # Create singleton instances
@@ -429,77 +437,95 @@ def am_i_a_match(candidate: Candidate, job: JobPosting) -> bool:
     return response
 
 def anonymize_resume(resume: str) -> str:
-    resume_lower = resume.lower()
-    if "skills" in resume_lower:
-        skills_idx = resume_lower.index("skills")
-    else:
-        skills_idx = 2147483647
-    if "experience" in resume_lower:
-        experience_idx = resume_lower.index("experience")
-    else:
-        experience_idx = 2147483647
-    if "project" in resume_lower:
-        project_idx = resume_lower.index("project")
-    else:
-        project_idx = 2147483647
-    if "education" in resume_lower:
-        education_idx = resume_lower.index("education")
-    else:
-        education_idx = 2147483647
-    personal_info_idx = min(skills_idx, experience_idx, project_idx, education_idx)
-    resume_personal_info = resume[:personal_info_idx]
-    resume_other = resume[personal_info_idx:]
-    results = analyzer.analyze(
-        text=resume_personal_info.lower(),
-            entities=[
-                "PERSON",
-                "EMAIL_ADDRESS",
-                "PHONE_NUMBER",
-                "SSN",
-                "CREDIT_CARD",
-                "URL",
-                "LOCATION"
-            ],
-        language='en',
-        allow_list=open("technical_terms.txt", "r").read().split(",")
-    )
-    with anonymizer_lock:
-        anonymized_personal_info = anonymizer.anonymize(
-            text=resume_personal_info,
-            analyzer_results=results,
-            operators={
-                "PHONE_NUMBER": OperatorConfig(
-                    "replace",
-                    {"new_value": "XXX-XXX-XXXX"}
-                ),
-                "EMAIL_ADDRESS": OperatorConfig(
-                    "replace",
-                    {"new_value": "<email>"}
-                ),
-                "PERSON": OperatorConfig(
-                    "replace",
-                    {"new_value": "<name>"}
-                ),
-                "URL": OperatorConfig(
-                    "replace",
-                    {"new_value": "<url>"}
-                ),
-                "LOCATION": OperatorConfig(
-                    "replace",
-                    {"new_value": "Anytown, Anycountry"}
-                ),
-                "CREDIT_CARD": OperatorConfig(
-                    "replace",
-                    {"new_value": "XXXX-XXXX-XXXX-XXXX"}
-                ),
-                "SSN": OperatorConfig(
-                    "replace",
-                    {"new_value": "XXX-XX-XXXX"}
-                )
-            }
-        )
-    
-    return anonymized_personal_info.text + resume_other
+    try:
+        resume_lower = resume.lower()
+        if "skills" in resume_lower:
+            skills_idx = resume_lower.index("skills")
+        else:
+            skills_idx = 2147483647
+        if "experience" in resume_lower:
+            experience_idx = resume_lower.index("experience")
+        else:
+            experience_idx = 2147483647
+        if "project" in resume_lower:
+            project_idx = resume_lower.index("project")
+        else:
+            project_idx = 2147483647
+        if "education" in resume_lower:
+            education_idx = resume_lower.index("education")
+        else:
+            education_idx = 2147483647
+        personal_info_idx = min(skills_idx, experience_idx, project_idx, education_idx)
+        resume_personal_info = resume[:personal_info_idx]
+        resume_other = resume[personal_info_idx:]
+
+        # Use the thread pool for analysis
+        def analyze_text():
+            return analyzer.analyze(
+                text=resume_personal_info.lower(),
+                entities=[
+                    "PERSON",
+                    "EMAIL_ADDRESS",
+                    "PHONE_NUMBER",
+                    "SSN",
+                    "CREDIT_CARD",
+                    "URL",
+                    "LOCATION"
+                ],
+                language='en',
+                allow_list=open("technical_terms.txt", "r").read().split(",")
+            )
+
+        # Submit the analysis task to the thread pool
+        future = anonymizer_thread_pool.submit(analyze_text)
+        results = future.result(timeout=30)  # Add timeout to prevent hanging
+
+        with anonymizer_lock:
+            anonymized_personal_info = anonymizer.anonymize(
+                text=resume_personal_info,
+                analyzer_results=results,
+                operators={
+                    "PHONE_NUMBER": OperatorConfig(
+                        "replace",
+                        {"new_value": "XXX-XXX-XXXX"}
+                    ),
+                    "EMAIL_ADDRESS": OperatorConfig(
+                        "replace",
+                        {"new_value": "<email>"}
+                    ),
+                    "PERSON": OperatorConfig(
+                        "replace",
+                        {"new_value": "<name>"}
+                    ),
+                    "URL": OperatorConfig(
+                        "replace",
+                        {"new_value": "<url>"}
+                    ),
+                    "LOCATION": OperatorConfig(
+                        "replace",
+                        {"new_value": "Anytown, Anycountry"}
+                    ),
+                    "CREDIT_CARD": OperatorConfig(
+                        "replace",
+                        {"new_value": "XXXX-XXXX-XXXX-XXXX"}
+                    ),
+                    "SSN": OperatorConfig(
+                        "replace",
+                        {"new_value": "XXX-XX-XXXX"}
+                    )
+                }
+            )
+        
+        return anonymized_personal_info.text + resume_other
+    except Exception as e:
+        logger.error(f"Error in anonymize_resume: {str(e)}")
+        # Return the original resume if anonymization fails
+        return resume
+
+# Add cleanup function to be called when the application shuts down
+def cleanup():
+    anonymizer_thread_pool.shutdown(wait=True)
+    logger.info("Anonymizer thread pool shut down")
 
 
 if __name__ == "__main__":
