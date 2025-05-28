@@ -428,8 +428,7 @@ def am_i_a_match(candidate: Candidate, job: JobPosting) -> bool:
         print(prompt)
     response = llm_request(llm_client,
                            messages=[{"role": "user", "content": prompt}],
-                           validate_fn=lambda _: True,
-                           model="deepseek-reasoner")
+                           validate_fn=lambda _: True)
     if not response:
         raise ValueError("Request failed, please try again later.")
     if "error" in response:
