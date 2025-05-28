@@ -160,8 +160,9 @@ export default function CandidateProfile() {
   };
 
   const handleAddSkill = () => {
-    if (newSkill && !skills.includes(newSkill)) {
-      const newSkills = [...skills, newSkill];
+    const trimmedSkill = newSkill.trim();
+    if (trimmedSkill && !skills.includes(trimmedSkill)) {
+      const newSkills = [...skills, trimmedSkill];
       setSkills(newSkills);
       setFormData(prev => ({ ...prev, skills: newSkills }));
       setNewSkill('');

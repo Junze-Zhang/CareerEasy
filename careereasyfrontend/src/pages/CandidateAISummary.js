@@ -129,8 +129,9 @@ export default function CandidateAISummary() {
   };
 
   const handleAddSkill = () => {
-    if (newSkill && !skills.includes(newSkill)) {
-      const newSkills = [...skills, newSkill];
+    const trimmedSkill = newSkill.trim();
+    if (trimmedSkill && !skills.includes(trimmedSkill)) {
+      const newSkills = [...skills, trimmedSkill];
       setSkills(newSkills);
       setCandidateInfo(prev => ({
         ...prev,
