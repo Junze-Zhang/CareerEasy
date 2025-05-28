@@ -382,15 +382,11 @@ def log_in(request):
         'max_age': 60 * 60 * 3,  # 3 hours
         'samesite': 'None',      # Changed from 'Lax' to 'None' for cross-origin
         'secure': True,          # Always use secure
-        'domain': '.career-easy.com'  # Always use domain for subdomain support
     }
     
-    # Only set domain and secure for production
+    # Only set domain in production
     if not is_localhost:
-        cookie_options.update({
-            'domain': '.career-easy.com',
-            'secure': True,
-        })
+        cookie_options['domain'] = '.career-easy.com'  # Domain for subdomain support in production
     
     response.set_cookie(**cookie_options)
     

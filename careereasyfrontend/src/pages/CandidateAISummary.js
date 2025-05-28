@@ -130,15 +130,20 @@ export default function CandidateAISummary() {
 
   const handleAddSkill = () => {
     const trimmedSkill = newSkill.trim();
-    if (trimmedSkill && !skills.includes(trimmedSkill)) {
-      const newSkills = [...skills, trimmedSkill];
-      setSkills(newSkills);
-      setCandidateInfo(prev => ({
-        ...prev,
-        skills: newSkills
-      }));
+    if (trimmedSkill) {
+      if (skills.includes(trimmedSkill)) {
+        setSnackbar({
+          open: true,
+          message: "This skill is already in your skillset",
+          severity: "info"
+        });
+      } else {
+        const newSkills = [...skills, trimmedSkill];
+        setSkills(newSkills);
+        setCandidateInfo(prev => ({ ...prev, skills: newSkills }));
+        setInfoChanged(true);
+      }
       setNewSkill('');
-      setInfoChanged(true);
     }
   };
 
