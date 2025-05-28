@@ -12,3 +12,7 @@ node_modules
 *.pem
 ssh-tunnel.sh
 keys/
+
+*.pyc
+**/__pycache__/
+__pycache__/

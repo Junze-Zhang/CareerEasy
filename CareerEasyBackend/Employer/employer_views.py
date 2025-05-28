@@ -117,8 +117,30 @@ def log_in(request):
         return JsonResponse({"Error": "Invalid username or password."}, status=401)
 
     response = JsonResponse({"Success": "Signed in successfully."}, status=200)
-    response.set_cookie(key='employer_id', value=account.id,
-                        max_age=60 * 60 * 3)  # 3 hours
+    
+    # Get the host from the request
+    host = request.get_host()
+    is_localhost = 'localhost' in host or '127.0.0.1' in host
+    
+    # Set cookies with proper attributes
+    cookie_options = {
+        'key': 'employer_id',
+        'value': account.id,
+        'max_age': 60 * 60 * 3,  # 3 hours
+        'samesite': 'None',      # For cross-origin
+        'secure': True,          # Always use secure
+        'domain': '.career-easy.com'  # For subdomain support
+    }
+    
+    # Only set domain and secure for production
+    if not is_localhost:
+        cookie_options.update({
+            'domain': '.career-easy.com',
+            'secure': True,
+        })
+    
+    response.set_cookie(**cookie_options)
+    
     return response
 
 
@@ -133,7 +155,28 @@ def log_in(request):
 def log_out(request):
     response = JsonResponse(
         {"Success": "Signed out successfully."}, status=200)
-    response.delete_cookie('employer_id')
+    
+    # Get the host from the request
+    host = request.get_host()
+    is_localhost = 'localhost' in host or '127.0.0.1' in host
+    
+    # Delete cookies with proper attributes
+    cookie_options = {
+        'key': 'employer_id',
+        'samesite': 'None',
+        'secure': True,
+        'domain': '.career-easy.com'
+    }
+    
+    # Only set domain and secure for production
+    if not is_localhost:
+        cookie_options.update({
+            'domain': '.career-easy.com',
+            'secure': True,
+        })
+    
+    response.delete_cookie(**cookie_options)
+    
     return response
 
 

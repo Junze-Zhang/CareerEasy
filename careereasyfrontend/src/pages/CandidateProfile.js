@@ -160,12 +160,21 @@ export default function CandidateProfile() {
   };
 
   const handleAddSkill = () => {
-    if (newSkill && !skills.includes(newSkill)) {
-      const newSkills = [...skills, newSkill];
-      setSkills(newSkills);
-      setFormData(prev => ({ ...prev, skills: newSkills }));
+    const trimmedSkill = newSkill.trim();
+    if (trimmedSkill) {
+      if (skills.includes(trimmedSkill)) {
+        setSnackbar({
+          open: true,
+          message: "This skill is already in your skillset",
+          severity: "info"
+        });
+      } else {
+        const newSkills = [...skills, trimmedSkill];
+        setSkills(newSkills);
+        setFormData(prev => ({ ...prev, skills: newSkills }));
+        setInfoChanged(true);
+      }
       setNewSkill('');
-      setInfoChanged(true);
     }
   };
 

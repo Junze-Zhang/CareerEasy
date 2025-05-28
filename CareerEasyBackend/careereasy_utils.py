@@ -15,12 +15,37 @@ from django.db.models import QuerySet
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
+from presidio_analyzer.nlp_engine import NlpEngineProvider
+import threading
+from concurrent.futures import ThreadPoolExecutor
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "CareerEasy.settings")
 
-
 django.setup()
+
+# Configure the NLP engine with the medium model
+nlp_configuration = {
+    "nlp_engine_name": "spacy",
+    "models": [{"lang_code": "en", "model_name": "en_core_web_md"}]
+}
+
+# Create a thread pool for anonymization tasks
+MAX_WORKERS = 3  # Adjust this based on your server's capacity
+anonymizer_thread_pool = ThreadPoolExecutor(max_workers=MAX_WORKERS)
+
+print("Loading NLP engine for Presidio anonymizer...")
+# Create singleton instances
+nlp_engine_provider = NlpEngineProvider(nlp_configuration=nlp_configuration)
+nlp_engine = nlp_engine_provider.create_engine()
+analyzer = AnalyzerEngine(nlp_engine=nlp_engine)
+anonymizer = AnonymizerEngine()
+anonymizer_lock = threading.Lock()
+print("NLP engine loaded.")
 
 
 def validate_exp(response: str) -> bool:
@@ -74,9 +99,12 @@ def extract_from_resume(candidate: Candidate) -> dict:
     if "error" in response:
         raise ValueError(json.loads(response)["error"])
     if settings.DEBUG:
-        with open(f".debug/{candidate.id}.txt", "w") as f:
+        debug_dir = os.path.join(settings.BASE_DIR, '.debug')
+        if not os.path.exists(debug_dir):
+            os.makedirs(debug_dir)
+        with open(os.path.join(debug_dir, f"{candidate.id}.txt"), "w") as f:
             f.write(f"Prompt: {prompt_exp}\n")
-            f.write(f"Reasoning: {response.reasoning_content}\n")
+            # f.write(f"Reasoning: {response.reasoning_content}\n")
             f.write(f"Response: {response.content}\n\n")
     response_json = json.loads(response.content)
     candidate_info["exp_month"] = response_json["experience_months"]
@@ -91,7 +119,10 @@ def extract_from_resume(candidate: Candidate) -> dict:
     if not response:
         raise ValueError("Failed to extract skills from resume.")
     if settings.DEBUG:
-        with open(f".debug/{candidate.id}.txt", "a") as f:
+        debug_dir = os.path.join(settings.BASE_DIR, '.debug')
+        if not os.path.exists(debug_dir):
+            os.makedirs(debug_dir)
+        with open(os.path.join(debug_dir, f"{candidate.id}.txt"), "a") as f:
             f.write(f"Prompt: {PROMPT_CANDIDATE_SKILLS}\n")
             f.write(f"Reasoning: {response.reasoning_content}\n")
             f.write(f"Response: {response.content}\n\n")
@@ -108,7 +139,10 @@ def extract_from_resume(candidate: Candidate) -> dict:
     if not response:
         raise ValueError("Failed to extract highlights from resume.")
     if settings.DEBUG:
-        with open(f".debug/{candidate.id}.txt", "a") as f:
+        debug_dir = os.path.join(settings.BASE_DIR, '.debug')
+        if not os.path.exists(debug_dir):
+            os.makedirs(debug_dir)
+        with open(os.path.join(debug_dir, f"{candidate.id}.txt"), "a") as f:
             f.write(f"Prompt: {prompt_ai_highlights}\n")
             f.write(f"Reasoning: {response.reasoning_content}\n")
             f.write(f"Response: {response.content}\n\n")
@@ -394,8 +428,7 @@ def am_i_a_match(candidate: Candidate, job: JobPosting) -> bool:
         print(prompt)
     response = llm_request(llm_client,
                            messages=[{"role": "user", "content": prompt}],
-                           validate_fn=lambda _: True,
-                           model="deepseek-reasoner")
+                           validate_fn=lambda _: True)
     if not response:
         raise ValueError("Request failed, please try again later.")
     if "error" in response:
@@ -403,78 +436,95 @@ def am_i_a_match(candidate: Candidate, job: JobPosting) -> bool:
     return response
 
 def anonymize_resume(resume: str) -> str:
-    analyzer = AnalyzerEngine()
-    anonymizer = AnonymizerEngine()
-    resume_lower = resume.lower()
-    if "skills" in resume_lower:
-        skills_idx = resume_lower.index("skills")
-    else:
-        skills_idx = 2147483647
-    if "experience" in resume_lower:
-        experience_idx = resume_lower.index("experience")
-    else:
-        experience_idx = 2147483647
-    if "project" in resume_lower:
-        project_idx = resume_lower.index("project")
-    else:
-        project_idx = 2147483647
-    if "education" in resume_lower:
-        education_idx = resume_lower.index("education")
-    else:
-        education_idx = 2147483647
-    personal_info_idx = min(skills_idx, experience_idx, project_idx, education_idx)
-    resume_personal_info = resume[:personal_info_idx]
-    resume_other = resume[personal_info_idx:]
-    results = analyzer.analyze(
-        text=resume_personal_info.lower(),
-            entities=[
-                "PERSON",
-                "EMAIL_ADDRESS",
-                "PHONE_NUMBER",
-                "SSN",
-                "CREDIT_CARD",
-                "URL",
-                "LOCATION"
-            ],
-        language='en',
-        allow_list=open("technical_terms.txt", "r").read().split(",")
-    )
-    anonymized_personal_info = anonymizer.anonymize(
-        text=resume_personal_info,
-        analyzer_results=results,
-        operators={
-            "PHONE_NUMBER": OperatorConfig(
-                "replace",
-                {"new_value": "XXX-XXX-XXXX"}
-            ),
-            "EMAIL_ADDRESS": OperatorConfig(
-                "replace",
-                {"new_value": "<email>"}
-            ),
-            "PERSON": OperatorConfig(
-                "replace",
-                {"new_value": "<name>"}
-            ),
-            "URL": OperatorConfig(
-                "replace",
-                {"new_value": "<url>"}
-            ),
-            "LOCATION": OperatorConfig(
-                "replace",
-                {"new_value": "Anytown, Anycountry"}
-            ),
-            "CREDIT_CARD": OperatorConfig(
-                "replace",
-                {"new_value": "XXXX-XXXX-XXXX-XXXX"}
-            ),
-            "SSN": OperatorConfig(
-                "replace",
-                {"new_value": "XXX-XX-XXXX"}
+    try:
+        resume_lower = resume.lower()
+        if "skills" in resume_lower:
+            skills_idx = resume_lower.index("skills")
+        else:
+            skills_idx = 2147483647
+        if "experience" in resume_lower:
+            experience_idx = resume_lower.index("experience")
+        else:
+            experience_idx = 2147483647
+        if "project" in resume_lower:
+            project_idx = resume_lower.index("project")
+        else:
+            project_idx = 2147483647
+        if "education" in resume_lower:
+            education_idx = resume_lower.index("education")
+        else:
+            education_idx = 2147483647
+        personal_info_idx = min(skills_idx, experience_idx, project_idx, education_idx)
+        resume_personal_info = resume[:personal_info_idx]
+        resume_other = resume[personal_info_idx:]
+
+        # Use the thread pool for analysis
+        def analyze_text():
+            return analyzer.analyze(
+                text=resume_personal_info.lower(),
+                entities=[
+                    "PERSON",
+                    "EMAIL_ADDRESS",
+                    "PHONE_NUMBER",
+                    "SSN",
+                    "CREDIT_CARD",
+                    "URL",
+                    "LOCATION"
+                ],
+                language='en',
+                allow_list=open("technical_terms.txt", "r").read().split(",")
             )
-        }
-    )
-    
-    return anonymized_personal_info.text + resume_other
+
+        # Submit the analysis task to the thread pool
+        future = anonymizer_thread_pool.submit(analyze_text)
+        results = future.result(timeout=30)  # Add timeout to prevent hanging
+
+        with anonymizer_lock:
+            anonymized_personal_info = anonymizer.anonymize(
+                text=resume_personal_info,
+                analyzer_results=results,
+                operators={
+                    "PHONE_NUMBER": OperatorConfig(
+                        "replace",
+                        {"new_value": "XXX-XXX-XXXX"}
+                    ),
+                    "EMAIL_ADDRESS": OperatorConfig(
+                        "replace",
+                        {"new_value": "<email>"}
+                    ),
+                    "PERSON": OperatorConfig(
+                        "replace",
+                        {"new_value": "<name>"}
+                    ),
+                    "URL": OperatorConfig(
+                        "replace",
+                        {"new_value": "<url>"}
+                    ),
+                    "LOCATION": OperatorConfig(
+                        "replace",
+                        {"new_value": "Anytown, Anycountry"}
+                    ),
+                    "CREDIT_CARD": OperatorConfig(
+                        "replace",
+                        {"new_value": "XXXX-XXXX-XXXX-XXXX"}
+                    ),
+                    "SSN": OperatorConfig(
+                        "replace",
+                        {"new_value": "XXX-XX-XXXX"}
+                    )
+                }
+            )
+        
+        return anonymized_personal_info.text + resume_other
+    except Exception as e:
+        logger.error(f"Error in anonymize_resume: {str(e)}")
+        # Return the original resume if anonymization fails
+        return resume
+
+# Add cleanup function to be called when the application shuts down
+def cleanup():
+    anonymizer_thread_pool.shutdown(wait=True)
+    logger.info("Anonymizer thread pool shut down")
 
 
 if __name__ == "__main__":

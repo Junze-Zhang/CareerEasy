@@ -380,15 +380,13 @@ def log_in(request):
         'key': 'candidate_id',
         'value': account.candidate.id,
         'max_age': 60 * 60 * 3,  # 3 hours
-        'samesite': 'Lax',  # Changed from 'None' to 'Lax' for better compatibility
+        'samesite': 'None',      # Changed from 'Lax' to 'None' for cross-origin
+        'secure': True,          # Always use secure
     }
     
-    # Only set domain and secure for production
+    # Only set domain in production
     if not is_localhost:
-        cookie_options.update({
-            'domain': '.career-easy.com',
-            'secure': True,
-        })
+        cookie_options['domain'] = '.career-easy.com'  # Domain for subdomain support in production
     
     response.set_cookie(**cookie_options)
     
@@ -419,15 +417,8 @@ def log_out(request):
     # Delete cookies with proper attributes
     cookie_options = {
         'key': 'candidate_id',
-        'samesite': 'Lax',
+        'domain': '.career-easy.com'
     }
-    
-    # Only set domain and secure for production
-    if not is_localhost:
-        cookie_options.update({
-            'domain': '.career-easy.com',
-            'secure': True,
-        })
     
     response.delete_cookie(**cookie_options)
     

@@ -47,7 +47,7 @@ export default function UploadResume() {
       // Step 2: Show analyzing popup and call aiExtract
       setSnackbar({
         open: true,
-        message: "✨ Analyzing your resume with Reasoning AI. This may take up to a few minutes...",
+        message: "✨ Analyzing your resume with Reasoning AI. This may take as long as 20 minutes...",
         severity: "info"
       });
       const aiResponse = await candidateAPI.extractCandidateInfo();

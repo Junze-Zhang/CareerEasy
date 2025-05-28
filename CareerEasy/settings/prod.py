@@ -6,6 +6,7 @@ load_dotenv(BASE_DIR / 'credentials.env')
 
 DEBUG = False
 ALLOWED_HOSTS = [
+    'api.career-easy.com',
     'career-easy.com',
     'www.career-easy.com',
     'localhost',
@@ -38,8 +39,11 @@ DATABASES = {
 # CORS settings
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+    "https://www.career-easy.com",
     "https://career-easy.com",
+    "https://careereasy-frontend.vercel.app",
+    "https://api.career-easy.com",
+    "http://localhost:3000",  # (optional, for local dev)
 ]
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -64,11 +68,15 @@ CORS_ALLOW_HEADERS = [
 # Cookie settings
 SESSION_COOKIE_SAMESITE = 'None'  # Required for cross-origin requests
 CSRF_COOKIE_SAMESITE = 'None'     # Required for cross-origin requests
-SESSION_COOKIE_DOMAIN = '.career-easy.com'  # Allow subdomains
-CSRF_COOKIE_DOMAIN = '.career-easy.com'     # Allow subdomains
+SESSION_COOKIE_DOMAIN = ".career-easy.com"
+CSRF_COOKIE_DOMAIN = ".career-easy.com"
+SESSION_COOKIE_SECURE = True      # Only send cookies over HTTPS
+CSRF_COOKIE_SECURE = True         # Only send cookies over HTTPS
 
 # Static and Media files
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DJANGO_CRYPTO_FIELDS_KEY_PATH = 'keys/'
+
+print("The server is running in production mode")
