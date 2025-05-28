@@ -92,6 +92,8 @@ def extract_from_resume(candidate: Candidate) -> dict:
     if not response:
         raise ValueError("Failed to extract skills from resume.")
     if settings.DEBUG:
+        if not os.path.exists(f".debug"):
+            os.mkdir(f".debug")
         with open(f".debug/{candidate.id}.txt", "a") as f:
             f.write(f"Prompt: {PROMPT_CANDIDATE_SKILLS}\n")
             f.write(f"Reasoning: {response.reasoning_content}\n")
