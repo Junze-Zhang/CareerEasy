@@ -73,15 +73,20 @@ def sign_up(request):
     password = data.get('password')
     preferred_career_types = data.get('preferred_career_types')
     location = data.get('location')
+    state = data.get('state')
+    city = data.get('city')
     country = data.get('country')
     title = data.get('title')
-#    profile_pic = data.get('profile_pic')
+#   # profile_pic = data.get('profile_pic')
     # TODO: support uploading profile picture
     profile_pic = S3_BASE_URL.format(n=random.randint(1, 10))
 
-    if not all([username, first_name, last_name, email, phone, password, preferred_career_types, location, country, title]):
+    if not all([username, first_name, last_name, email, phone, password, preferred_career_types, country, title]):
         return JsonResponse({"Error": "Missing required fields."}, status=400)
-
+    if not location:
+        if not (state and city):
+            return JsonResponse({"Error": "Missing required fields."}, status=400)
+        location = f"{city}, {state}"
     existing_account = CandidateAccount.objects.filter(
         username=username).first()
     if existing_account is not None:
@@ -89,10 +94,10 @@ def sign_up(request):
     existing_account = CandidateAccount.objects.filter(email=email).first()
     if existing_account is not None:
         return JsonResponse({"Error": "Email is already taken."}, status=409)
-    existing_account = CandidateAccount.objects.filter(
-        email=work_email).first()
-    if existing_account is not None:
-        return JsonResponse({"Error": "Email is already taken."}, status=409)
+    # existing_account = CandidateAccount.objects.filter(
+    #     email=work_email).first()
+    # if existing_account is not None:
+    #     return JsonResponse({"Error": "Email is already taken."}, status=409)
 
     if work_email is None:
         work_email = email

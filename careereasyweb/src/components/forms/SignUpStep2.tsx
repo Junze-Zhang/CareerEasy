@@ -1,0 +1,222 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useSignUp } from '@/contexts/SignUpContext';
+import ProgressIndicator from './ProgressIndicator';
+import StateProvinceSelect from './StateProvinceSelect';
+import CitySelect from './CitySelect';
+import JobTitlesMultiSelect from './JobTitlesMultiSelect';
+
+export default function SignUpStep2() {
+  const router = useRouter();
+  const { formData, errors, updateFormData, updateErrors, isStepValid } = useSignUp();
+
+  const validateCountry = (country: string): string | undefined => {
+    if (!country) return 'Country is required';
+    if (!['US', 'Canada'].includes(country)) return 'Please select US or Canada';
+    return undefined;
+  };
+
+  const validateState = (state: string): string | undefined => {
+    if (!state) return 'State/Province is required';
+    return undefined;
+  };
+
+  const validateCity = (city: string): string | undefined => {
+    if (!city) return 'City is required';
+    if (city.length < 2) return 'Please enter a valid city';
+    return undefined;
+  };
+
+  const validateDesiredJobTitles = (titles: number[]): string | undefined => {
+    if (titles.length === 0) return 'Please select at least one desired job title';
+    return undefined;
+  };
+
+  const handleInputChange = (field: keyof typeof formData, value: string | number[]) => {
+    updateFormData(field, value);
+
+    let error: string | undefined;
+    switch (field) {
+      case 'country':
+        error = validateCountry(value as string);
+        // Reset state and city when country changes
+        if (formData.state) {
+          updateFormData('state', '');
+          updateErrors('state', undefined);
+        }
+        if (formData.city) {
+          updateFormData('city', '');
+          updateErrors('city', undefined);
+        }
+        break;
+      case 'state':
+        error = validateState(value as string);
+        // Reset city when state changes
+        if (formData.city) {
+          updateFormData('city', '');
+          updateErrors('city', undefined);
+        }
+        break;
+      case 'city':
+        error = validateCity(value as string);
+        break;
+      case 'desiredJobTitles':
+        error = validateDesiredJobTitles(value as number[]);
+        break;
+    }
+
+    updateErrors(field, error);
+  };
+
+  const getInputClassName = (field: keyof typeof formData): string => {
+    const hasError = errors[field] && (
+      field === 'desiredJobTitles' 
+        ? formData.desiredJobTitles.length === 0
+        : formData[field as keyof typeof formData]
+    );
+    return `w-full px-4 py-3 border rounded-xl transition-all duration-300 ${
+      hasError 
+        ? 'border-red-500 bg-red-50 focus:border-red-500 focus:ring-red-200' 
+        : 'border-gray-300 focus:border-brand-navy focus:ring-brand-light-blue/20'
+    } focus:ring-4 focus:outline-none`;
+  };
+
+  const handleNext = () => {
+    if (isStepValid(2)) {
+      router.push('/signup/step-3');
+    }
+  };
+
+  const handleBack = () => {
+    router.push('/signup/step-1');
+  };
+
+  const countryOptions = [
+    { value: '', label: 'Select your country' },
+    { value: 'US', label: 'United States' },
+    { value: 'Canada', label: 'Canada' }
+  ];
+
+  return (
+    <section className="pt-24 pb-16 lg:pt-32 lg:pb-20 min-h-screen relative">
+      <div className="container-max section-padding relative z-10">
+        <div className="max-w-2xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="hero-title text-comfortable mb-4">
+              Location & Career Goals
+            </h1>
+            <p className="hero-subtitle text-comfortable">
+              Tell us where you&apos;d like to work and what roles interest you
+            </p>
+          </div>
+
+          {/* Progress Indicator */}
+          <ProgressIndicator currentStep={2} totalSteps={3} />
+
+          {/* Form */}
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+            <div className="space-y-6">
+              {/* Country */}
+              <div>
+                <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-2">
+                  Country
+                </label>
+                <select
+                  id="country"
+                  value={formData.country}
+                  onChange={(e) => handleInputChange('country', e.target.value)}
+                  className={getInputClassName('country')}
+                >
+                  {countryOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {errors.country && formData.country && (
+                  <p className="mt-1 text-sm text-red-600">{errors.country}</p>
+                )}
+              </div>
+
+              {/* State/Province */}
+              <div>
+                <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-2">
+                  {formData.country === 'US' ? 'State' : formData.country === 'Canada' ? 'Province' : 'State/Province'}
+                </label>
+                <StateProvinceSelect
+                  value={formData.state}
+                  onChange={(value) => handleInputChange('state', value)}
+                  country={formData.country}
+                  className={getInputClassName('state')}
+                  placeholder={formData.country ? 'Select state/province' : 'Please select a country first'}
+                />
+                {errors.state && formData.state && (
+                  <p className="mt-1 text-sm text-red-600">{errors.state}</p>
+                )}
+              </div>
+
+              {/* City */}
+              <div>
+                <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">
+                  City
+                </label>
+                <CitySelect
+                  value={formData.city}
+                  onChange={(value) => handleInputChange('city', value)}
+                  country={formData.country}
+                  state={formData.state}
+                  className={getInputClassName('city')}
+                  placeholder={formData.state ? 'Search or select your city' : 'Please select a state/province first'}
+                />
+                {errors.city && formData.city && (
+                  <p className="mt-1 text-sm text-red-600">{errors.city}</p>
+                )}
+              </div>
+
+              {/* Desired Job Titles */}
+              <div>
+                <label htmlFor="desiredJobTitles" className="block text-sm font-medium text-gray-700 mb-2">
+                  Desired Job Titles
+                </label>
+                <JobTitlesMultiSelect
+                  value={formData.desiredJobTitles}
+                  onChange={(value) => handleInputChange('desiredJobTitles', value)}
+                  className={getInputClassName('desiredJobTitles')}
+                  placeholder="Search and select job titles you're interested in"
+                />
+                {errors.desiredJobTitles && (
+                  <p className="mt-1 text-sm text-red-600">{errors.desiredJobTitles}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Navigation Buttons */}
+            <div className="flex justify-between mt-8">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-all duration-300 hover:scale-105"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={!isStepValid(2)}
+                className={`px-6 py-3 font-medium rounded-xl transition-all duration-300 ${
+                  isStepValid(2)
+                    ? 'bg-brand-light-blue hover:bg-brand-light-blue-dark text-black hover:scale-105 shadow-lg hover:shadow-xl'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

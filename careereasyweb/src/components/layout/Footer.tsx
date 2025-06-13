@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 export default function Footer() {
   return (
     <footer className="bg-transparent text-comfortable relative z-10 border-t border-gray-400">

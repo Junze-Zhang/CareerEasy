@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -10,8 +11,17 @@ const navigation = [
   { name: 'CareerEasy for Business', href: '#contact' },
 ];
 
-export default function Navbar() {
+interface NavbarProps {
+  hideGetStarted?: boolean;
+}
+
+export default function Navbar({ hideGetStarted = false }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const router = useRouter();
+
+  const handleGetStarted = () => {
+    router.push('/signup');
+  };
 
   return (
     <>
@@ -52,9 +62,14 @@ export default function Navbar() {
                 <button className="text-comfortable hover:text-brand-navy font-medium text-sm transition-all duration-300 hover:scale-105">
                   Log in
                 </button>
-                <button className="bg-brand-light-blue hover-bg-brand-light-blue-dark text-comfortable font-semibold text-sm py-2 px-5 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95">
-                  Get Started
-                </button>
+                {!hideGetStarted && (
+                  <button 
+                    onClick={handleGetStarted}
+                    className="bg-brand-light-blue hover-bg-brand-light-blue-dark text-comfortable font-semibold text-sm py-2 px-5 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95"
+                  >
+                    Get Started
+                  </button>
+                )}
               </div>
             </div>
 
@@ -97,9 +112,14 @@ export default function Navbar() {
                   <button className="text-comfortable hover:text-brand-navy font-medium text-sm py-2 transition-all duration-300 hover:scale-105">
                     Log in
                   </button>
-                  <button className="bg-brand-light-blue hover-bg-brand-light-blue-dark text-comfortable font-semibold text-sm py-2.5 px-5 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95">
-                    Try it free
-                  </button>
+                  {!hideGetStarted && (
+                    <button 
+                      onClick={handleGetStarted}
+                      className="bg-brand-light-blue hover-bg-brand-light-blue-dark text-comfortable font-semibold text-sm py-2.5 px-5 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95"
+                    >
+                      Get Started
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
