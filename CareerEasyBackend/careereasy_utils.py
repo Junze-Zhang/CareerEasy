@@ -19,6 +19,13 @@ from presidio_analyzer.nlp_engine import NlpEngineProvider
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import logging
+import boto3
+from botocore.exceptions import NoCredentialsError, ClientError
+import uuid
+from urllib.parse import urlparse
+import PyPDF2
+import docx
+from io import BytesIO
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -525,6 +532,251 @@ def anonymize_resume(resume: str) -> str:
 def cleanup():
     anonymizer_thread_pool.shutdown(wait=True)
     logger.info("Anonymizer thread pool shut down")
+
+
+def extract_text_from_pdf(file) -> str:
+    """
+    Extract text from PDF file.
+    
+    Args:
+        file: Django uploaded file object
+        
+    Returns:
+        str: Extracted text content
+        
+    Raises:
+        ValueError: If PDF cannot be processed
+    """
+    try:
+        # Create a BytesIO object from the file
+        file_content = BytesIO(file.read())
+        
+        # Create a PDF reader object
+        pdf_reader = PyPDF2.PdfReader(file_content)
+        
+        # Extract text from all pages
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text() + "\n"
+        
+        # Reset file pointer for potential future use
+        file.seek(0)
+        
+        if not text.strip():
+            raise ValueError("No text content found in PDF")
+            
+        logger.info("Successfully extracted text from PDF")
+        return text.strip()
+        
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF: {str(e)}")
+        raise ValueError(f"Failed to extract text from PDF: {str(e)}")
+
+
+def extract_text_from_docx(file) -> str:
+    """
+    Extract text from DOCX file.
+    
+    Args:
+        file: Django uploaded file object
+        
+    Returns:
+        str: Extracted text content
+        
+    Raises:
+        ValueError: If DOCX cannot be processed
+    """
+    try:
+        # Create a BytesIO object from the file
+        file_content = BytesIO(file.read())
+        
+        # Create a document object
+        doc = docx.Document(file_content)
+        
+        # Extract text from all paragraphs
+        text = ""
+        for paragraph in doc.paragraphs:
+            text += paragraph.text + "\n"
+        
+        # Extract text from tables
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    text += cell.text + " "
+                text += "\n"
+        
+        # Reset file pointer for potential future use
+        file.seek(0)
+        
+        if not text.strip():
+            raise ValueError("No text content found in DOCX")
+            
+        logger.info("Successfully extracted text from DOCX")
+        return text.strip()
+        
+    except Exception as e:
+        logger.error(f"Error extracting text from DOCX: {str(e)}")
+        raise ValueError(f"Failed to extract text from DOCX: {str(e)}")
+
+
+def extract_text_from_doc(file) -> str:
+    """
+    Extract text from DOC file using python-docx2txt.
+    Note: DOC files are legacy format and extraction may be limited.
+    
+    Args:
+        file: Django uploaded file object
+        
+    Returns:
+        str: Extracted text content
+        
+    Raises:
+        ValueError: If DOC cannot be processed
+    """
+    try:
+        import docx2txt
+        
+        # Create a temporary file to work with docx2txt
+        import tempfile
+        
+        with tempfile.NamedTemporaryFile(suffix='.doc', delete=False) as temp_file:
+            # Write file content to temporary file
+            for chunk in file.chunks():
+                temp_file.write(chunk)
+            temp_file.flush()
+            
+            # Extract text using docx2txt
+            text = docx2txt.process(temp_file.name)
+            
+        # Clean up temporary file
+        os.unlink(temp_file.name)
+        
+        # Reset file pointer for potential future use
+        file.seek(0)
+        
+        if not text.strip():
+            raise ValueError("No text content found in DOC")
+            
+        logger.info("Successfully extracted text from DOC")
+        return text.strip()
+        
+    except ImportError:
+        logger.error("docx2txt library not available for DOC files")
+        raise ValueError("DOC file format not supported. Please convert to DOCX or PDF.")
+    except Exception as e:
+        logger.error(f"Error extracting text from DOC: {str(e)}")
+        raise ValueError(f"Failed to extract text from DOC: {str(e)}")
+
+
+def extract_text_from_file(file) -> str:
+    """
+    Extract text from various file formats (TXT, PDF, DOCX, DOC).
+    
+    Args:
+        file: Django uploaded file object
+        
+    Returns:
+        str: Extracted text content
+        
+    Raises:
+        ValueError: If file format is not supported or cannot be processed
+    """
+    if not hasattr(file, 'name') or not file.name:
+        raise ValueError("File must have a name/extension")
+    
+    file_extension = os.path.splitext(file.name)[1].lower()
+    
+    try:
+        if file_extension == '.txt':
+            # Handle plain text files
+            return file.read().decode('utf-8')
+        if file_extension == '.pdf':
+            return extract_text_from_pdf(file)
+        elif file_extension == '.docx':
+            return extract_text_from_docx(file)
+        elif file_extension == '.doc':
+            return extract_text_from_doc(file)
+        else:
+            # Defaults to plain text files
+            return file.read().decode('utf-8')
+
+    except UnicodeDecodeError:
+        raise ValueError(f"Unsupported file format: {file_extension}. Supported formats: .pdf, .docx, .doc, plain text")
+
+
+def upload_profile_picture_to_s3(file, candidate_id: str) -> str:
+    """
+    Upload a profile picture to S3 and return the URL.
+    
+    Args:
+        file: Django uploaded file object
+        candidate_id: String ID of the candidate
+        
+    Returns:
+        str: S3 URL of the uploaded file
+        
+    Raises:
+        ValueError: If upload fails or invalid file type
+    """
+    # Validate file type
+    allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+    file_extension = None
+    
+    if hasattr(file, 'name') and file.name:
+        file_extension = os.path.splitext(file.name)[1].lower()
+        if file_extension not in allowed_extensions:
+            raise ValueError(f"Invalid file type. Allowed types: {', '.join(allowed_extensions)}")
+    else:
+        # Default to .jpg if no extension is provided
+        file_extension = '.jpg'
+    
+    # Validate file size (max 10MB)
+    max_size = 10 * 1024 * 1024  # 10MB
+    if hasattr(file, 'size') and file.size > max_size:
+        raise ValueError("File size too large. Maximum size is 10MB.")
+    
+    try:
+        # Initialize S3 client
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+            region_name=os.getenv('AWS_REGION', 'ca-central-1')
+        )
+        
+        # Generate unique filename
+        unique_filename = f"profile-pictures/{candidate_id}_{uuid.uuid4().hex[:8]}{file_extension}"
+        
+        # Get bucket name from S3_BASE_URL
+        from CareerEasyBackend.initDB import S3_BASE_URL
+        parsed_url = urlparse(S3_BASE_URL.format(n="dummy"))
+        bucket_name = parsed_url.netloc.split('.')[0]  # Extract bucket name from hostname
+        
+        # Upload file to S3
+        s3_client.upload_fileobj(
+            file,
+            bucket_name,
+            unique_filename,
+            ExtraArgs={
+                'ContentType': f'image/{file_extension.lstrip(".")}',
+                'ACL': 'public-read'  # Make the file publicly readable
+            }
+        )
+        
+        # Return the full S3 URL
+        s3_url = f"https://{bucket_name}.s3.ca-central-1.amazonaws.com/{unique_filename}"
+        logger.info(f"Successfully uploaded profile picture to S3: {s3_url}")
+        return s3_url
+        
+    except NoCredentialsError:
+        logger.error("AWS credentials not found")
+        raise ValueError("Server configuration error: AWS credentials not found")
+    except ClientError as e:
+        logger.error(f"AWS S3 error: {str(e)}")
+        raise ValueError(f"Failed to upload file to S3: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error during S3 upload: {str(e)}")
+        raise ValueError(f"Failed to upload profile picture: {str(e)}")
 
 
 if __name__ == "__main__":

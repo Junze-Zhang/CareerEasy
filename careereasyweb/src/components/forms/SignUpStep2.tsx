@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { useSignUp } from '@/contexts/SignUpContext';
 import ProgressIndicator from './ProgressIndicator';
 import StateProvinceSelect from './StateProvinceSelect';
@@ -75,7 +76,7 @@ export default function SignUpStep2() {
         ? formData.desiredJobTitles.length === 0
         : formData[field as keyof typeof formData]
     );
-    return `w-full px-4 py-3 border rounded-xl transition-all duration-300 ${
+    return `w-full px-4 py-3 border rounded-xl transition-all duration-300 transform hover:scale-[1.02] focus:scale-[1.02] ${
       hasError 
         ? 'border-red-500 bg-red-50 focus:border-red-500 focus:ring-red-200' 
         : 'border-gray-300 focus:border-brand-navy focus:ring-brand-light-blue/20'
@@ -99,27 +100,53 @@ export default function SignUpStep2() {
   ];
 
   return (
-    <section className="pt-24 pb-16 lg:pt-32 lg:pb-20 min-h-screen relative">
+    <motion.section 
+      className="pt-24 pb-16 lg:pt-32 lg:pb-20 min-h-screen relative"
+      initial={{ opacity: 0, x: 50 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -50 }}
+      transition={{ duration: 0.6 }}
+    >
       <div className="container-max section-padding relative z-10">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
-          <div className="text-center mb-8">
+          <motion.div 
+            className="text-center mb-8"
+            initial={{ y: -30, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
             <h1 className="hero-title text-comfortable mb-4">
               Location & Career Goals
             </h1>
             <p className="hero-subtitle text-comfortable">
               Tell us where you&apos;d like to work and what roles interest you
             </p>
-          </div>
+          </motion.div>
 
           {/* Progress Indicator */}
-          <ProgressIndicator currentStep={2} totalSteps={3} />
+          <motion.div
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+          >
+            <ProgressIndicator currentStep={2} totalSteps={3} />
+          </motion.div>
 
           {/* Form */}
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+          <motion.div 
+            className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8"
+            initial={{ y: 30, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+          >
             <div className="space-y-6">
               {/* Country */}
-              <div>
+              <motion.div
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.8 }}
+              >
                 <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-2">
                   Country
                 </label>
@@ -136,12 +163,23 @@ export default function SignUpStep2() {
                   ))}
                 </select>
                 {errors.country && formData.country && (
-                  <p className="mt-1 text-sm text-red-600">{errors.country}</p>
+                  <motion.p 
+                    className="mt-1 text-sm text-red-600"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {errors.country}
+                  </motion.p>
                 )}
-              </div>
+              </motion.div>
 
               {/* State/Province */}
-              <div>
+              <motion.div
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.9 }}
+              >
                 <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-2">
                   {formData.country === 'US' ? 'State' : formData.country === 'Canada' ? 'Province' : 'State/Province'}
                 </label>
@@ -153,12 +191,23 @@ export default function SignUpStep2() {
                   placeholder={formData.country ? 'Select state/province' : 'Please select a country first'}
                 />
                 {errors.state && formData.state && (
-                  <p className="mt-1 text-sm text-red-600">{errors.state}</p>
+                  <motion.p 
+                    className="mt-1 text-sm text-red-600"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {errors.state}
+                  </motion.p>
                 )}
-              </div>
+              </motion.div>
 
               {/* City */}
-              <div>
+              <motion.div
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.0 }}
+              >
                 <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">
                   City
                 </label>
@@ -171,12 +220,23 @@ export default function SignUpStep2() {
                   placeholder={formData.state ? 'Search or select your city' : 'Please select a state/province first'}
                 />
                 {errors.city && formData.city && (
-                  <p className="mt-1 text-sm text-red-600">{errors.city}</p>
+                  <motion.p 
+                    className="mt-1 text-sm text-red-600"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {errors.city}
+                  </motion.p>
                 )}
-              </div>
+              </motion.div>
 
               {/* Desired Job Titles */}
-              <div>
+              <motion.div
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.1 }}
+              >
                 <label htmlFor="desiredJobTitles" className="block text-sm font-medium text-gray-700 mb-2">
                   Desired Job Titles
                 </label>
@@ -187,21 +247,35 @@ export default function SignUpStep2() {
                   placeholder="Search and select job titles you're interested in"
                 />
                 {errors.desiredJobTitles && (
-                  <p className="mt-1 text-sm text-red-600">{errors.desiredJobTitles}</p>
+                  <motion.p 
+                    className="mt-1 text-sm text-red-600"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {errors.desiredJobTitles}
+                  </motion.p>
                 )}
-              </div>
+              </motion.div>
             </div>
 
             {/* Navigation Buttons */}
-            <div className="flex justify-between mt-8">
-              <button
+            <motion.div 
+              className="flex justify-between mt-8"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.5, delay: 1.3 }}
+            >
+              <motion.button
                 type="button"
                 onClick={handleBack}
                 className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-all duration-300 hover:scale-105"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 Back
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 type="button"
                 onClick={handleNext}
                 disabled={!isStepValid(2)}
@@ -210,13 +284,15 @@ export default function SignUpStep2() {
                     ? 'bg-brand-light-blue hover:bg-brand-light-blue-dark text-black hover:scale-105 shadow-lg hover:shadow-xl'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
+                whileHover={isStepValid(2) ? { scale: 1.05 } : {}}
+                whileTap={isStepValid(2) ? { scale: 0.95 } : {}}
               >
                 Next
-              </button>
-            </div>
-          </div>
+              </motion.button>
+            </motion.div>
+          </motion.div>
         </div>
       </div>
-    </section>
+    </motion.section>
   );
 }

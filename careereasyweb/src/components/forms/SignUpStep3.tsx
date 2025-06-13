@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
+import { EyeIcon, EyeSlashIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { useSignUp } from '@/contexts/SignUpContext';
 import ProgressIndicator from './ProgressIndicator';
 
@@ -119,7 +120,7 @@ export default function SignUpStep3() {
 
   const getInputClassName = (field: keyof typeof formData): string => {
     const hasError = errors[field] && formData[field];
-    return `w-full px-4 py-3 border rounded-xl transition-all duration-300 ${
+    return `w-full px-4 py-3 border rounded-xl transition-all duration-300 transform hover:scale-[1.02] focus:scale-[1.02] ${
       hasError 
         ? 'border-red-500 bg-red-50 focus:border-red-500 focus:ring-red-200' 
         : 'border-gray-300 focus:border-brand-navy focus:ring-brand-light-blue/20'
@@ -152,27 +153,53 @@ export default function SignUpStep3() {
   };
 
   return (
-    <section className="pt-24 pb-16 lg:pt-32 lg:pb-20 min-h-screen relative">
+    <motion.section 
+      className="pt-24 pb-16 lg:pt-32 lg:pb-20 min-h-screen relative"
+      initial={{ opacity: 0, x: 50 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -50 }}
+      transition={{ duration: 0.6 }}
+    >
       <div className="container-max section-padding relative z-10">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
-          <div className="text-center mb-8">
+          <motion.div 
+            className="text-center mb-8"
+            initial={{ y: -30, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
             <h1 className="hero-title text-comfortable mb-4">
               Create Your Account
             </h1>
             <p className="hero-subtitle text-comfortable">
               Almost done! Create your CareerEasy account
             </p>
-          </div>
+          </motion.div>
 
           {/* Progress Indicator */}
-          <ProgressIndicator currentStep={3} totalSteps={3} />
+          <motion.div
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+          >
+            <ProgressIndicator currentStep={3} totalSteps={3} />
+          </motion.div>
 
           {/* Form */}
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+          <motion.div 
+            className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8"
+            initial={{ y: 30, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+          >
             <div className="space-y-6">
               {/* Username */}
-              <div>
+              <motion.div
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.8 }}
+              >
                 <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
                   Username
                 </label>
@@ -185,12 +212,23 @@ export default function SignUpStep3() {
                   placeholder="Enter your username"
                 />
                 {errors.username && formData.username && (
-                  <p className="mt-1 text-sm text-red-600">{errors.username}</p>
+                  <motion.p 
+                    className="mt-1 text-sm text-red-600"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {errors.username}
+                  </motion.p>
                 )}
-              </div>
+              </motion.div>
 
               {/* Email */}
-              <div>
+              <motion.div
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.9 }}
+              >
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                   Email Address
                 </label>
@@ -203,12 +241,23 @@ export default function SignUpStep3() {
                   placeholder="Enter your email address"
                 />
                 {errors.email && formData.email && (
-                  <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+                  <motion.p 
+                    className="mt-1 text-sm text-red-600"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {errors.email}
+                  </motion.p>
                 )}
-              </div>
+              </motion.div>
 
               {/* Phone Number */}
-              <div>
+              <motion.div
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.0 }}
+              >
                 <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
                   Phone Number
                 </label>
@@ -224,12 +273,23 @@ export default function SignUpStep3() {
                   +1 numbers only
                 </p>
                 {errors.phone && formData.phone && (
-                  <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
+                  <motion.p 
+                    className="mt-1 text-sm text-red-600"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {errors.phone}
+                  </motion.p>
                 )}
-              </div>
+              </motion.div>
 
               {/* Password */}
-              <div>
+              <motion.div
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.1 }}
+              >
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                   Password
                 </label>
@@ -242,65 +302,189 @@ export default function SignUpStep3() {
                     className={getInputClassName('password')}
                     placeholder="Enter your password"
                   />
-                  <button
+                  <motion.button
                     type="button"
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     onClick={() => setShowPassword(!showPassword)}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
                   >
-                    {showPassword ? (
-                      <EyeSlashIcon className="h-5 w-5 text-gray-400" />
-                    ) : (
-                      <EyeIcon className="h-5 w-5 text-gray-400" />
-                    )}
-                  </button>
+                    <AnimatePresence mode="wait">
+                      {showPassword ? (
+                        <motion.div
+                          key="eye-slash"
+                          initial={{ opacity: 0, rotate: 180 }}
+                          animate={{ opacity: 1, rotate: 0 }}
+                          exit={{ opacity: 0, rotate: -180 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <EyeSlashIcon className="h-5 w-5 text-gray-400" />
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="eye"
+                          initial={{ opacity: 0, rotate: 180 }}
+                          animate={{ opacity: 1, rotate: 0 }}
+                          exit={{ opacity: 0, rotate: -180 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <EyeIcon className="h-5 w-5 text-gray-400" />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
                 </div>
                 
                 {/* Password Requirements */}
-                {formData.password && (
-                  <div className="mt-2 space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <div className={`w-3 h-3 rounded-full ${passwordRequirements.length ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                      <span className={`text-xs ${passwordRequirements.length ? 'text-green-600' : 'text-gray-500'}`}>
-                        At least 6 characters
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className={`w-3 h-3 rounded-full ${passwordRequirements.uppercase ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                      <span className={`text-xs ${passwordRequirements.uppercase ? 'text-green-600' : 'text-gray-500'}`}>
-                        Uppercase letter (A-Z)
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className={`w-3 h-3 rounded-full ${passwordRequirements.lowercase ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                      <span className={`text-xs ${passwordRequirements.lowercase ? 'text-green-600' : 'text-gray-500'}`}>
-                        Lowercase letter (a-z)
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className={`w-3 h-3 rounded-full ${passwordRequirements.number ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                      <span className={`text-xs ${passwordRequirements.number ? 'text-green-600' : 'text-gray-500'}`}>
-                        Number (0-9)
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className={`w-3 h-3 rounded-full ${passwordRequirements.symbol ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                      <span className={`text-xs ${passwordRequirements.symbol ? 'text-green-600' : 'text-gray-500'}`}>
-                        Symbol (!@#$%^&*)
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Password must meet at least 2 of the above requirements
-                    </p>
-                  </div>
-                )}
+                <AnimatePresence>
+                  {formData.password && (
+                    <motion.div 
+                      className="mt-2 space-y-1"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <motion.div 
+                        className="flex items-center space-x-2"
+                        initial={{ x: -10, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        transition={{ delay: 0.1 }}
+                      >
+                        <motion.div 
+                          className={`w-3 h-3 rounded-full transition-colors duration-300`}
+                          animate={{ 
+                            backgroundColor: passwordRequirements.length ? '#10b981' : '#d1d5db',
+                            scale: passwordRequirements.length ? [1, 1.2, 1] : 1
+                          }}
+                          transition={{ duration: 0.3 }}
+                        >
+                          {passwordRequirements.length && (
+                            <CheckCircleIcon className="w-3 h-3 text-white" />
+                          )}
+                        </motion.div>
+                        <span className={`text-xs transition-colors duration-300 ${passwordRequirements.length ? 'text-green-600' : 'text-gray-500'}`}>
+                          At least 6 characters
+                        </span>
+                      </motion.div>
+                      <motion.div 
+                        className="flex items-center space-x-2"
+                        initial={{ x: -10, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        transition={{ delay: 0.15 }}
+                      >
+                        <motion.div 
+                          className={`w-3 h-3 rounded-full transition-colors duration-300`}
+                          animate={{ 
+                            backgroundColor: passwordRequirements.uppercase ? '#10b981' : '#d1d5db',
+                            scale: passwordRequirements.uppercase ? [1, 1.2, 1] : 1
+                          }}
+                          transition={{ duration: 0.3 }}
+                        >
+                          {passwordRequirements.uppercase && (
+                            <CheckCircleIcon className="w-3 h-3 text-white" />
+                          )}
+                        </motion.div>
+                        <span className={`text-xs transition-colors duration-300 ${passwordRequirements.uppercase ? 'text-green-600' : 'text-gray-500'}`}>
+                          Uppercase letter (A-Z)
+                        </span>
+                      </motion.div>
+                      <motion.div 
+                        className="flex items-center space-x-2"
+                        initial={{ x: -10, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        transition={{ delay: 0.2 }}
+                      >
+                        <motion.div 
+                          className={`w-3 h-3 rounded-full transition-colors duration-300`}
+                          animate={{ 
+                            backgroundColor: passwordRequirements.lowercase ? '#10b981' : '#d1d5db',
+                            scale: passwordRequirements.lowercase ? [1, 1.2, 1] : 1
+                          }}
+                          transition={{ duration: 0.3 }}
+                        >
+                          {passwordRequirements.lowercase && (
+                            <CheckCircleIcon className="w-3 h-3 text-white" />
+                          )}
+                        </motion.div>
+                        <span className={`text-xs transition-colors duration-300 ${passwordRequirements.lowercase ? 'text-green-600' : 'text-gray-500'}`}>
+                          Lowercase letter (a-z)
+                        </span>
+                      </motion.div>
+                      <motion.div 
+                        className="flex items-center space-x-2"
+                        initial={{ x: -10, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        transition={{ delay: 0.25 }}
+                      >
+                        <motion.div 
+                          className={`w-3 h-3 rounded-full transition-colors duration-300`}
+                          animate={{ 
+                            backgroundColor: passwordRequirements.number ? '#10b981' : '#d1d5db',
+                            scale: passwordRequirements.number ? [1, 1.2, 1] : 1
+                          }}
+                          transition={{ duration: 0.3 }}
+                        >
+                          {passwordRequirements.number && (
+                            <CheckCircleIcon className="w-3 h-3 text-white" />
+                          )}
+                        </motion.div>
+                        <span className={`text-xs transition-colors duration-300 ${passwordRequirements.number ? 'text-green-600' : 'text-gray-500'}`}>
+                          Number (0-9)
+                        </span>
+                      </motion.div>
+                      <motion.div 
+                        className="flex items-center space-x-2"
+                        initial={{ x: -10, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        transition={{ delay: 0.3 }}
+                      >
+                        <motion.div 
+                          className={`w-3 h-3 rounded-full transition-colors duration-300`}
+                          animate={{ 
+                            backgroundColor: passwordRequirements.symbol ? '#10b981' : '#d1d5db',
+                            scale: passwordRequirements.symbol ? [1, 1.2, 1] : 1
+                          }}
+                          transition={{ duration: 0.3 }}
+                        >
+                          {passwordRequirements.symbol && (
+                            <CheckCircleIcon className="w-3 h-3 text-white" />
+                          )}
+                        </motion.div>
+                        <span className={`text-xs transition-colors duration-300 ${passwordRequirements.symbol ? 'text-green-600' : 'text-gray-500'}`}>
+                          Symbol (!@#$%^&*)
+                        </span>
+                      </motion.div>
+                      <motion.p 
+                        className="text-xs text-gray-500 mt-1"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.35 }}
+                      >
+                        Password must meet at least 2 of the above requirements
+                      </motion.p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 
                 {errors.password && formData.password && (
-                  <p className="mt-1 text-sm text-red-600">{errors.password}</p>
+                  <motion.p 
+                    className="mt-1 text-sm text-red-600"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {errors.password}
+                  </motion.p>
                 )}
-              </div>
+              </motion.div>
 
               {/* Confirm Password */}
-              <div>
+              <motion.div
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.2 }}
+              >
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
                   Confirm Password
                 </label>
@@ -313,49 +497,111 @@ export default function SignUpStep3() {
                     className={getInputClassName('confirmPassword')}
                     placeholder="Confirm your password"
                   />
-                  <button
+                  <motion.button
                     type="button"
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
                   >
-                    {showConfirmPassword ? (
-                      <EyeSlashIcon className="h-5 w-5 text-gray-400" />
-                    ) : (
-                      <EyeIcon className="h-5 w-5 text-gray-400" />
-                    )}
-                  </button>
+                    <AnimatePresence mode="wait">
+                      {showConfirmPassword ? (
+                        <motion.div
+                          key="eye-slash-confirm"
+                          initial={{ opacity: 0, rotate: 180 }}
+                          animate={{ opacity: 1, rotate: 0 }}
+                          exit={{ opacity: 0, rotate: -180 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <EyeSlashIcon className="h-5 w-5 text-gray-400" />
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="eye-confirm"
+                          initial={{ opacity: 0, rotate: 180 }}
+                          animate={{ opacity: 1, rotate: 0 }}
+                          exit={{ opacity: 0, rotate: -180 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <EyeIcon className="h-5 w-5 text-gray-400" />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
                 </div>
                 {errors.confirmPassword && formData.confirmPassword && (
-                  <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
+                  <motion.p 
+                    className="mt-1 text-sm text-red-600"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {errors.confirmPassword}
+                  </motion.p>
                 )}
-              </div>
+              </motion.div>
             </div>
 
             {/* Navigation Buttons */}
-            <div className="flex justify-between mt-8">
-              <button
+            <motion.div 
+              className="flex justify-between mt-8"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.5, delay: 1.4 }}
+            >
+              <motion.button
                 type="button"
                 onClick={handleBack}
                 className="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-all duration-300 hover:scale-105"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 Back
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 type="button"
                 onClick={handleSubmit}
                 disabled={!isStepValid(3) || isSubmitting}
-                className={`px-6 py-3 font-medium rounded-xl transition-all duration-300 ${
+                className={`px-6 py-3 font-medium rounded-xl transition-all duration-300 relative overflow-hidden ${
                   isStepValid(3) && !isSubmitting
                     ? 'bg-brand-light-blue hover:bg-brand-light-blue-dark text-black hover:scale-105 shadow-lg hover:shadow-xl'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
+                whileHover={isStepValid(3) && !isSubmitting ? { scale: 1.05 } : {}}
+                whileTap={isStepValid(3) && !isSubmitting ? { scale: 0.95 } : {}}
               >
-                {isSubmitting ? 'Creating Account...' : 'Create Account'}
-              </button>
-            </div>
-          </div>
+                <AnimatePresence mode="wait">
+                  {isSubmitting ? (
+                    <motion.div
+                      key="submitting"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      className="flex items-center space-x-2"
+                    >
+                      <motion.div
+                        className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      />
+                      <span>Creating Account...</span>
+                    </motion.div>
+                  ) : (
+                    <motion.span
+                      key="create"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                    >
+                      Create Account
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            </motion.div>
+          </motion.div>
         </div>
       </div>
-    </section>
+    </motion.section>
   );
 }

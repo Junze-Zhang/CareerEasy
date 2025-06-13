@@ -6,6 +6,7 @@ urlpatterns = [
     path('logout', candidate_views.log_out),
     path('signup', candidate_views.sign_up),
     path('upload_resume', candidate_views.upload_resume),
+    path('download_resume', candidate_views.download_resume),
     path('ai_extract', candidate_views.extract_candidate_info),
     path('update_info', candidate_views.update_candidate_info),
     path('update_highlights', candidate_views.update_highlights),
@@ -15,5 +16,6 @@ urlpatterns = [
     path('check_fit', candidate_views.check_fit),
     path('updateprofile', candidate_views.update_profile),
     path('updatepassword', candidate_views.update_password),
+    path('update_profile_picture', candidate_views.update_profile_picture),
     path('<str:candidate_id>', candidate_views.get_candidate_info),
 ]

@@ -27,14 +27,15 @@ from CareerEasy.constants import *
 from CareerEasyBackend.Candidate.models import *
 from CareerEasyBackend.initDB import S3_BASE_URL
 from CareerEasyBackend.models import *
-from CareerEasyBackend.careereasy_utils import am_i_a_match, anonymize_resume, extract_from_resume, update_ai_highlights
+from CareerEasyBackend.careereasy_utils import am_i_a_match, anonymize_resume, extract_from_resume, \
+    update_ai_highlights, upload_profile_picture_to_s3, extract_text_from_file, logger
 
 
 @extend_schema(
     tags=['Candidate Account Management'],
-    description='Register a new candidate account',
+    description='Register a new candidate account with optional profile picture',
     request={
-        'application/json': {
+        'multipart/form-data': {
             'type': 'object',
             'properties': {
                 'username': {'type': 'string', 'description': 'Username for the account'},
@@ -45,13 +46,16 @@ from CareerEasyBackend.careereasy_utils import am_i_a_match, anonymize_resume, e
                 'work_email': {'type': 'string', 'format': 'email', 'description': 'Work email (optional)'},
                 'phone': {'type': 'string', 'description': 'Phone number'},
                 'password': {'type': 'string', 'description': 'Account password'},
-                'preferred_career_types': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Preferred career types'},
-                'location': {'type': 'string', 'description': 'Current location'},
+                'preferred_career_types': {'type': 'string', 'description': 'Comma-separated preferred career type IDs'},
+                'location': {'type': 'string', 'description': 'Current location (optional if state and city provided)'},
+                'state': {'type': 'string', 'description': 'State/Province (optional if location provided)'},
+                'city': {'type': 'string', 'description': 'City (optional if location provided)'},
                 'country': {'type': 'string', 'description': 'Country'},
-                'title': {'type': 'string', 'description': 'Current job title'}
+                'title': {'type': 'string', 'description': 'Current job title'},
+                'profile_pic': {'type': 'string', 'format': 'binary', 'description': 'Profile picture (optional, max 10MB)'}
             },
             'required': ['username', 'first_name', 'last_name', 'email', 'phone', 'password',
-                         'preferred_career_types', 'location', 'country', 'title']
+                         'preferred_career_types', 'country', 'title']
         }
     },
     responses={
@@ -77,9 +81,27 @@ def sign_up(request):
     city = data.get('city')
     country = data.get('country')
     title = data.get('title')
-#   # profile_pic = data.get('profile_pic')
-    # TODO: support uploading profile picture
-    profile_pic = S3_BASE_URL.format(n=random.randint(1, 10))
+    
+    # Handle profile picture upload
+    profile_pic = None
+    if 'profile_pic' in request.FILES:
+        profile_pic_file = request.FILES['profile_pic']
+        try:
+            # We'll upload after creating the candidate to get the ID
+            pass
+        except Exception as e:
+            return JsonResponse({"Error": f"Profile picture upload failed: {str(e)}"}, status=400)
+    
+    # Default profile picture if none provided
+    if not profile_pic:
+        profile_pic = S3_BASE_URL.format(n=random.randint(1, 10))
+
+    # Parse preferred_career_types if it's a string (from multipart form data)
+    if isinstance(preferred_career_types, str):
+        try:
+            preferred_career_types = [int(x.strip()) for x in preferred_career_types.split(',') if x.strip()]
+        except ValueError:
+            return JsonResponse({"Error": "Invalid preferred career types format."}, status=400)
 
     if not all([username, first_name, last_name, email, phone, password, preferred_career_types, country, title]):
         return JsonResponse({"Error": "Missing required fields."}, status=400)
@@ -113,6 +135,16 @@ def sign_up(request):
                               standardized_title=STANDARDIZE_FN(title))
     new_candidate.save()  # Save the candidate first
 
+    # Upload custom profile picture if provided
+    if 'profile_pic' in request.FILES:
+        try:
+            profile_pic_file = request.FILES['profile_pic']
+            custom_profile_pic_url = upload_profile_picture_to_s3(profile_pic_file, str(new_candidate.id))
+            new_candidate.profile_pic = custom_profile_pic_url
+            new_candidate.save()  # Update with custom profile picture URL
+        except Exception as e:
+            return JsonResponse({"Error": f"Profile picture upload failed: {str(e)}"}, status=400)
+
     for career_id in preferred_career_types:
         career = Career.objects.filter(id=career_id).first()
         if career is None:
@@ -131,12 +163,12 @@ def sign_up(request):
 
 @extend_schema(
     tags=['Candidate Profile'],
-    description='Upload candidate resume',
+    description='Upload candidate resume (supports TXT, PDF, DOC, DOCX formats)',
     request={
         'multipart/form-data': {
             'type': 'object',
             'properties': {
-                'resume': {'type': 'string', 'format': 'binary', 'description': 'Resume file (text format)'}
+                'resume': {'type': 'string', 'format': 'binary', 'description': 'Resume file (.txt, .pdf, .doc, .docx)'}
             },
             'required': ['resume']
         }
@@ -152,8 +184,8 @@ def sign_up(request):
 def upload_resume(request):
     """
     Handle resume file uploads.
-    Accepts plain text files.
-    # TODO: support PDF and DOCX files
+    Supports TXT, PDF, DOC, and DOCX files.
+    Stores original files locally with random IDs and extracts text for AI analysis.
     """
     if 'resume' not in request.FILES:
         return JsonResponse({"Error": "No file was uploaded."}, status=400)
@@ -168,34 +200,113 @@ def upload_resume(request):
     if not candidate:
         return JsonResponse({"Error": "Candidate not found."}, status=404)
 
-    resume_text = ""
-    # Validate if file is a plain text file
+    # Validate file size (max 25MB for documents)
+    max_size = 25 * 1024 * 1024  # 25MB
+    if file.size > max_size:
+        return JsonResponse({"Error": "File size too large. Maximum size is 25MB."}, status=400)
+
+    # Validate file extension
+    if not hasattr(file, 'name') or not file.name:
+        return JsonResponse({"Error": "File must have a valid name and extension."}, status=400)
+    
+    file_extension = os.path.splitext(file.name)[1].lower()
+    allowed_extensions = ['.txt', '.pdf', '.doc', '.docx']
+    if file_extension not in allowed_extensions:
+        return JsonResponse({
+            "Error": f"Unsupported file format. Allowed formats: {', '.join(allowed_extensions)}"
+        }, status=400)
+
+    # Extract text content from file
     try:
-        resume_text = file.read().decode('utf-8')
-    except:
-        return JsonResponse({"Error": "Invalid file type. Only plain text files are allowed."}, status=400)
+        resume_text = extract_text_from_file(file)
+        if not resume_text.strip():
+            return JsonResponse({"Error": "No text content found in the uploaded file."}, status=400)
+    except Exception as e:
+        return JsonResponse({"Error": str(e)}, status=400)
 
-    # Create media directory if it doesn't exist
+    # Create resumes directory if it doesn't exist
     media_root = settings.MEDIA_ROOT
-    if not os.path.exists(media_root):
-        os.makedirs(media_root)
+    resumes_dir = os.path.join(media_root, 'resumes')
+    if not os.path.exists(resumes_dir):
+        os.makedirs(resumes_dir)
 
-    # Generate unique filename
-    filename = f"resumes/{candidate_id}_{file.name}"
-    filepath = os.path.join(media_root, filename)
-
-    # Save the file
+    # Generate random filename to prevent direct access and filename conflicts
+    random_id = uuid.uuid4().hex[:16]  # 16 character random ID
+    filename = f"resumes/{random_id}{file_extension}"
+    
+    # Reset file pointer before saving
+    file.seek(0)
+    
+    # Save the original file with random name
     fs = FileSystemStorage()
-    saved_file = fs.save(filename, file)
+    saved_file_path = fs.save(filename, file)
+    
+    # Get the full file path for storage in database
+    full_file_path = os.path.join(media_root, saved_file_path)
 
-    # Update candidate's resume field with the file path
+    # Update candidate's resume fields
     candidate.resume = resume_text
+    candidate.original_resume_path = full_file_path  # Store path to original file
     candidate.anonymous_resume = anonymize_resume(resume_text)
     candidate.standardized_resume = STANDARDIZE_FN(resume_text)
     candidate.standardized_anonymous_resume = STANDARDIZE_FN(candidate.anonymous_resume)
     candidate.save()
 
-    return JsonResponse({"Success": "Resume uploaded successfully."}, status=200)
+    return JsonResponse({
+        "Success": "Resume uploaded successfully.",
+        "file_type": file_extension,
+        "text_length": len(resume_text)
+    }, status=200)
+
+
+@extend_schema(
+    tags=['Candidate Profile'],
+    description='Download original resume file',
+    responses={
+        200: OpenApiTypes.BINARY,
+        401: OpenApiTypes.OBJECT,
+        404: OpenApiTypes.OBJECT
+    }
+)
+@api_view(['GET'])
+def download_resume(request):
+    """
+    Download the original resume file for the authenticated candidate.
+    """
+    candidate_id = request.COOKIES.get('candidate_id')
+    if not candidate_id:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    candidate = Candidate.objects.filter(id=candidate_id).first()
+    if not candidate:
+        return JsonResponse({"Error": "Candidate not found."}, status=404)
+
+    if not candidate.original_resume_path or not os.path.exists(candidate.original_resume_path):
+        return JsonResponse({"Error": "Original resume file not found."}, status=404)
+
+    try:
+        # Determine content type based on file extension
+        file_extension = os.path.splitext(candidate.original_resume_path)[1].lower()
+        content_type_map = {
+            '.txt': 'text/plain',
+            '.pdf': 'application/pdf',
+            '.doc': 'application/msword',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        }
+        content_type = content_type_map.get(file_extension, 'application/octet-stream')
+
+        # Get original filename (we can store this if needed, for now use a generic name)
+        filename = f"resume{file_extension}"
+
+        # Read and return the file
+        with open(candidate.original_resume_path, 'rb') as file:
+            response = HttpResponse(file.read(), content_type=content_type)
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+
+    except Exception as e:
+        logger.error(f"Error downloading resume: {str(e)}")
+        return JsonResponse({"Error": "Failed to download resume file."}, status=500)
 
 
 @extend_schema(
@@ -477,6 +588,58 @@ def update_password(request):
 
 @extend_schema(
     tags=['Candidate Profile'],
+    description='Upload or update candidate profile picture',
+    request={
+        'multipart/form-data': {
+            'type': 'object',
+            'properties': {
+                'profile_pic': {'type': 'string', 'format': 'binary', 'description': 'Profile picture file (max 10MB)'}
+            },
+            'required': ['profile_pic']
+        }
+    },
+    responses={
+        200: OpenApiTypes.OBJECT,
+        400: OpenApiTypes.OBJECT,
+        401: OpenApiTypes.OBJECT,
+        404: OpenApiTypes.OBJECT
+    }
+)
+@api_view(['POST'])
+def update_profile_picture(request):
+    """
+    Update candidate's profile picture by uploading to S3.
+    """
+    if 'profile_pic' not in request.FILES:
+        return JsonResponse({"Error": "No profile picture file was uploaded."}, status=400)
+
+    candidate_id = request.COOKIES.get('candidate_id')
+    if not candidate_id:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    candidate = Candidate.objects.filter(id=candidate_id).first()
+    if not candidate:
+        return JsonResponse({"Error": "Candidate not found."}, status=404)
+
+    try:
+        profile_pic_file = request.FILES['profile_pic']
+        new_profile_pic_url = upload_profile_picture_to_s3(profile_pic_file, str(candidate.id))
+        
+        # Update candidate's profile picture URL
+        candidate.profile_pic = new_profile_pic_url
+        candidate.save()
+
+        return JsonResponse({
+            "Success": "Profile picture updated successfully.",
+            "profile_pic_url": new_profile_pic_url
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({"Error": f"Profile picture upload failed: {str(e)}"}, status=400)
+
+
+@extend_schema(
+    tags=['Candidate Profile'],
     description='Update candidate profile information',
     request={
         'application/json': {
@@ -539,6 +702,7 @@ def get_candidate_info(request, candidate_id):
                                 "country": candidate.country,
                                 "title": candidate.title,
                                 "resume": candidate.resume,
+                                "profile_pic": candidate.profile_pic,
                                 "highlights": candidate.ai_highlights}, status=200)
         return JsonResponse({"name": candidate.first_name + " " + candidate.last_name,
                             "email": candidate.email,
@@ -551,6 +715,8 @@ def get_candidate_info(request, candidate_id):
                             "highest_education": candidate.highest_education,
                             "experience_months": candidate.experience_months,
                             "resume": candidate.resume,
+                            "profile_pic": candidate.profile_pic,
+                            "has_original_resume": bool(candidate.original_resume_path and os.path.exists(candidate.original_resume_path)),
                             "preferred_career_types": [career.name for career in candidate.preferred_career_types.all()]}, status=200)
     except django.core.exceptions.ValidationError:
         return JsonResponse({"Error": "Candidate not found."}, status=404)
