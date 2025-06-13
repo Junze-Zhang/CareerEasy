@@ -44,7 +44,7 @@ export default function Footer() {
             <h3 className="text-lg font-semibold">About Me</h3>
             <ul className="space-y-2 text-gray-700">
               <li>
-                <a href="https://www.example.com" className="hover:text-brand-navy transition-all duration-300 hover:scale-105 hover:-translate-y-0.5 relative group inline-block">
+                <a href="https://linkedin.com/in/junzezhang7" className="hover:text-brand-navy transition-all duration-300 hover:scale-105 hover:-translate-y-0.5 relative group inline-block">
                   LinkedIn
                   <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-brand-navy transition-all duration-300 group-hover:w-full"></span>
                 </a>
