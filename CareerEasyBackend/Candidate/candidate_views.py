@@ -82,14 +82,8 @@ def sign_up(request):
     country = data.get('country')
     title = data.get('title')
     
-    # Handle profile picture upload
-    profile_pic = None
-    if 'profile_pic' in request.FILES:
-        profile_pic = request.FILES['profile_pic']
-
-    # Default profile picture if none provided
-    if not profile_pic:
-        profile_pic = S3_BASE_URL.format(n=random.randint(1, 10))
+    # Set default profile picture URL
+    profile_pic_url = S3_BASE_URL.format(n=random.randint(1, 10))
 
     # Parse preferred_career_types if it's a string (from multipart form data)
     if isinstance(preferred_career_types, str):
@@ -125,7 +119,7 @@ def sign_up(request):
                               phone=phone,
                               location=location,
                               country=country,
-                              profile_pic=profile_pic,
+                              profile_pic=profile_pic_url,
                               title=title,
                               standardized_title=STANDARDIZE_FN(title))
     new_candidate.save()  # Save the candidate first
