@@ -8,7 +8,7 @@ export interface ProdConfig extends BaseConfig {
 
 const config: ProdConfig = {
   ...baseConfig,
-  API_BASE_URL: 'https://career-easy.com/api',
+  API_BASE_URL: 'https://api.career-easy.com',
   ENV: 'production',
   DEBUG: false,
 };

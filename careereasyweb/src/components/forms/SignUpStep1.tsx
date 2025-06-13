@@ -218,7 +218,7 @@ export default function SignUpStep1() {
                   placeholder="Enter your work email"
                 />
                 <p className="mt-1 text-xs text-gray-500">
-                  This email will be shown to employers. If left blank, your primary email will be used instead.
+                  This email will be shown to employers. If left blank, your account email will be used instead.
                 </p>
                 {errors.workEmail && formData.workEmail && (
                   <motion.p 

@@ -14,7 +14,7 @@ export default function SignUpStep2() {
 
   const validateCountry = (country: string): string | undefined => {
     if (!country) return 'Country is required';
-    if (!['US', 'Canada'].includes(country)) return 'Please select US or Canada';
+    if (!['United States', 'Canada'].includes(country)) return 'Please select United States or Canada';
     return undefined;
   };
 
@@ -95,7 +95,7 @@ export default function SignUpStep2() {
 
   const countryOptions = [
     { value: '', label: 'Select your country' },
-    { value: 'US', label: 'United States' },
+    { value: 'United States', label: 'United States' },
     { value: 'Canada', label: 'Canada' }
   ];
 
@@ -181,7 +181,7 @@ export default function SignUpStep2() {
                 transition={{ duration: 0.5, delay: 0.9 }}
               >
                 <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-2">
-                  {formData.country === 'US' ? 'State' : formData.country === 'Canada' ? 'Province' : 'State/Province'}
+                  {formData.country === 'United States' ? 'State' : formData.country === 'Canada' ? 'Province' : 'State/Province'}
                 </label>
                 <StateProvinceSelect
                   value={formData.state}

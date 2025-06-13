@@ -93,7 +93,7 @@ export default function CitySelect({ value, onChange, country, state, className 
 
   const cities = useMemo(() => {
     if (!state) return [];
-    const citiesMap = country === 'US' ? usCitiesByState : country === 'Canada' ? canadaCitiesByProvince : {};
+    const citiesMap = country === 'United States' ? usCitiesByState : country === 'Canada' ? canadaCitiesByProvince : {};
     const cityList = citiesMap[state] || [];
     // Remove duplicates and sort
     return [...new Set(cityList)].sort();

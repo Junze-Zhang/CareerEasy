@@ -91,7 +91,7 @@ export default function StateProvinceSelect({ value, onChange, country, classNam
   const inputRef = useRef<HTMLInputElement>(null);
 
   const options = useMemo(() => {
-    return country === 'US' ? usStates : country === 'Canada' ? canadaProvinces : [];
+    return country === 'United States' ? usStates : country === 'Canada' ? canadaProvinces : [];
   }, [country]);
 
   useEffect(() => {

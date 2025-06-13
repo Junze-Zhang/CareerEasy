@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { EyeIcon, EyeSlashIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, EyeSlashIcon, CheckCircleIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { useSignUp } from '@/contexts/SignUpContext';
 import ProgressIndicator from './ProgressIndicator';
 
@@ -16,12 +16,15 @@ export default function SignUpStep3() {
     updateFormData,
     updateErrors,
     updatePasswordRequirements,
-    isStepValid
+    isStepValid,
+    submitForm
   } = useSignUp();
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [profilePreview, setProfilePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validateUsername = (username: string): string | undefined => {
     if (!username) return undefined;
@@ -70,6 +73,54 @@ export default function SignUpStep3() {
     if (!confirmPassword) return undefined;
     if (confirmPassword !== password) return 'Passwords do not match';
     return undefined;
+  };
+
+  const validateProfilePicture = (file: File | null): string | undefined => {
+    if (!file) return undefined; // Profile picture is optional
+    
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      return 'Please upload a valid image file (JPEG, PNG, GIF, or WebP)';
+    }
+    
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      return 'Image file size must be less than 10MB';
+    }
+    
+    return undefined;
+  };
+
+  const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    
+    if (file) {
+      const error = validateProfilePicture(file);
+      updateErrors('profilePicture', error);
+      
+      if (!error) {
+        // Create preview URL
+        const previewUrl = URL.createObjectURL(file);
+        setProfilePreview(previewUrl);
+        updateFormData('profilePicture', file);
+      } else {
+        setProfilePreview(null);
+        updateFormData('profilePicture', null);
+      }
+    } else {
+      setProfilePreview(null);
+      updateFormData('profilePicture', null);
+      updateErrors('profilePicture', undefined);
+    }
+  };
+
+  const handleRemoveProfilePicture = () => {
+    setProfilePreview(null);
+    updateFormData('profilePicture', null);
+    updateErrors('profilePicture', undefined);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const formatPhoneNumber = (value: string): string => {
@@ -132,17 +183,20 @@ export default function SignUpStep3() {
 
     setIsSubmitting(true);
     try {
-      // TODO: Replace with actual API call
-      console.log('Submitting form data:', formData);
+      const result = await submitForm();
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Success - redirect to success page or dashboard
-      router.push('/signup/success');
+      if (result.success) {
+        // Success - redirect to success page
+        router.push('/signup/success');
+      } else {
+        // Handle API error
+        console.error('Sign-up failed:', result.error);
+        // You could show a toast notification or set a global error state here
+        alert(result.error || 'Sign up failed. Please try again.');
+      }
     } catch (error) {
-      console.error('Sign-up failed:', error);
-      // Handle error - show error message
+      console.error('Unexpected error during sign-up:', error);
+      alert('An unexpected error occurred. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -537,6 +591,87 @@ export default function SignUpStep3() {
                     transition={{ duration: 0.3 }}
                   >
                     {errors.confirmPassword}
+                  </motion.p>
+                )}
+              </motion.div>
+
+              {/* Profile Picture */}
+              <motion.div
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 1.3 }}
+              >
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Profile Picture <span className="text-gray-500 font-normal">(Optional)</span>
+                </label>
+                <div className="mt-2 flex items-center space-x-4">
+                  <div className="relative">
+                    {profilePreview ? (
+                      <motion.div
+                        className="w-20 h-20 rounded-full overflow-hidden border-2 border-gray-300"
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <img
+                          src={profilePreview}
+                          alt="Profile preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </motion.div>
+                    ) : (
+                      <div className="w-20 h-20 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center">
+                        <PhotoIcon className="w-8 h-8 text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfilePictureChange}
+                      className="hidden"
+                      id="profile-picture"
+                    />
+                    <div className="flex space-x-2">
+                      <motion.button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-4 py-2 text-sm font-medium text-brand-navy border border-brand-navy rounded-lg hover:bg-brand-navy hover:text-white transition-colors duration-300"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        {profilePreview ? 'Change Photo' : 'Choose Photo'}
+                      </motion.button>
+                      {profilePreview && (
+                        <motion.button
+                          type="button"
+                          onClick={handleRemoveProfilePicture}
+                          className="px-4 py-2 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-all duration-300"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -10 }}
+                        >
+                          Remove
+                        </motion.button>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Upload a photo to personalize your profile. Max size: 10MB
+                    </p>
+                  </div>
+                </div>
+                {errors.profilePicture && (
+                  <motion.p 
+                    className="mt-1 text-sm text-red-600"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {errors.profilePicture}
                   </motion.p>
                 )}
               </motion.div>

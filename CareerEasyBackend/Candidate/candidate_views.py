@@ -85,13 +85,8 @@ def sign_up(request):
     # Handle profile picture upload
     profile_pic = None
     if 'profile_pic' in request.FILES:
-        profile_pic_file = request.FILES['profile_pic']
-        try:
-            # We'll upload after creating the candidate to get the ID
-            pass
-        except Exception as e:
-            return JsonResponse({"Error": f"Profile picture upload failed: {str(e)}"}, status=400)
-    
+        profile_pic = request.FILES['profile_pic']
+
     # Default profile picture if none provided
     if not profile_pic:
         profile_pic = S3_BASE_URL.format(n=random.randint(1, 10))
@@ -99,7 +94,7 @@ def sign_up(request):
     # Parse preferred_career_types if it's a string (from multipart form data)
     if isinstance(preferred_career_types, str):
         try:
-            preferred_career_types = [int(x.strip()) for x in preferred_career_types.split(',') if x.strip()]
+            preferred_career_types = [x for x in preferred_career_types.split(',')]
         except ValueError:
             return JsonResponse({"Error": "Invalid preferred career types format."}, status=400)
 
@@ -148,7 +143,7 @@ def sign_up(request):
     for career_id in preferred_career_types:
         career = Career.objects.filter(id=career_id).first()
         if career is None:
-            pass  # TODO: support adding new career types
+            pass  # Adding new career types should be done by employers
         else:
             new_candidate.preferred_career_types.add(career)
     encrypted_password = hashpw(password.encode('utf8'), gensalt())
