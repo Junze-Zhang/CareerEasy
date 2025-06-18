@@ -10,7 +10,8 @@ ALLOWED_HOSTS = [
     'career-easy.com',
     'www.career-easy.com',
     'localhost',
-    '127.0.0.1'
+    '127.0.0.1',
+    '15.223.47.120'
 ]
 SECRET_KEY = os.environ.get('SECRET_KEY', None)
 if not SECRET_KEY:

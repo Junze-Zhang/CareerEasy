@@ -372,6 +372,7 @@ def update_candidate_info(request):
     location = data.get('location')
     country = data.get('country')
     experience_months = data.get('experience_months')
+    title = data.get('title')
     skills = data.get('skills')
     highest_education = data.get('highest_education')
     preferred_career_types = data.get('preferred_career_types')
@@ -384,8 +385,9 @@ def update_candidate_info(request):
                   "country", 
                   "experience_months",
                   "skills",
-                  "highest_education"]:
-        if field in data:
+                  "highest_education",
+                  "title"]:
+        if field in data and data.get(field) != "":
             setattr(candidate, field, data.get(field))
     if preferred_career_types is not None and len(preferred_career_types) > 0:
         candidate.preferred_career_types.clear()
