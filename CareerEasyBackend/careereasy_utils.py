@@ -772,8 +772,13 @@ def upload_profile_picture_to_s3(file, candidate_id: str) -> str:
         logger.error("AWS credentials not found")
         raise ValueError("Server configuration error: AWS credentials not found")
     except ClientError as e:
+        error_code = e.response['Error']['Code']
         logger.error(f"AWS S3 error: {str(e)}")
-        raise ValueError(f"Failed to upload file to S3: {str(e)}")
+        
+        if error_code == 'AccessDenied':
+            raise ValueError("Profile picture upload is temporarily unavailable. Please try again later or contact support.")
+        else:
+            raise ValueError(f"Failed to upload file to S3: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error during S3 upload: {str(e)}")
         raise ValueError(f"Failed to upload profile picture: {str(e)}")

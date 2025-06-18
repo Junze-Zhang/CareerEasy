@@ -8,7 +8,7 @@ export interface DevConfig extends BaseConfig {
 
 const config: DevConfig = {
   ...baseConfig,
-  API_BASE_URL: 'https://api.career-easy.com',
+  API_BASE_URL: 'http://localhost:8000',
   ENV: 'development',
   DEBUG: true,
 };

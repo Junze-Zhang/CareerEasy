@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useSignUp } from '@/contexts/SignUpContext';
@@ -10,7 +11,14 @@ import JobTitlesMultiSelect from './JobTitlesMultiSelect';
 
 export default function SignUpStep2() {
   const router = useRouter();
-  const { formData, errors, updateFormData, updateErrors, isStepValid } = useSignUp();
+  const { formData, errors, updateFormData, updateErrors, isStepValid, canAccessStep } = useSignUp();
+
+  // Check if user can access this step, redirect if not
+  useEffect(() => {
+    if (!canAccessStep(2)) {
+      router.replace('/signup/step-1');
+    }
+  }, [canAccessStep, router]);
 
   const validateCountry = (country: string): string | undefined => {
     if (!country) return 'Country is required';

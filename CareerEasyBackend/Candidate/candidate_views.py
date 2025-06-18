@@ -132,7 +132,9 @@ def sign_up(request):
             new_candidate.profile_pic = custom_profile_pic_url
             new_candidate.save()  # Update with custom profile picture URL
         except Exception as e:
-            return JsonResponse({"Error": f"Profile picture upload failed: {str(e)}"}, status=400)
+            # Log the error but don't fail the account creation
+            logger.warning(f"Profile picture upload failed for candidate {new_candidate.id}: {str(e)}")
+            # Account will be created with default profile picture
 
     for career_id in preferred_career_types:
         career = Career.objects.filter(id=career_id).first()
@@ -365,7 +367,7 @@ def update_candidate_info(request):
     first_name = data.get('first_name')
     middle_name = data.get('middle_name')
     last_name = data.get('last_name')
-    email = data.get('email')
+    email = data.get('work_email')
     phone = data.get('phone')
     location = data.get('location')
     country = data.get('country')
@@ -378,7 +380,7 @@ def update_candidate_info(request):
                   "last_name", 
                   "phone",
                   "email",
-                  "location", 
+                  "location",
                   "country", 
                   "experience_months",
                   "skills",
@@ -485,8 +487,8 @@ def log_in(request):
         'key': 'candidate_id',
         'value': account.candidate.id,
         'max_age': 60 * 60 * 3,  # 3 hours
-        'samesite': 'None',      # Changed from 'Lax' to 'None' for cross-origin
-        'secure': True,          # Always use secure
+        'samesite': 'Lax' if is_localhost else 'None',      # Use Lax for localhost, None for production
+        'secure': False if is_localhost else True,          # Disable secure for localhost HTTP
     }
     
     # Only set domain in production
@@ -520,16 +522,14 @@ def log_out(request):
     is_localhost = 'localhost' in host or '127.0.0.1' in host
     
     # Delete cookies with proper attributes
-    cookie_options = {
-        'key': 'candidate_id',
-        'domain': '.career-easy.com'
-    }
-    
-    response.delete_cookie(**cookie_options)
-    
-    # Delete candidate_account_id cookie with same options
-    cookie_options['key'] = 'candidate_account_id'
-    response.delete_cookie(**cookie_options)
+    if is_localhost:
+        # For localhost, delete without domain
+        response.delete_cookie('candidate_id')
+        response.delete_cookie('candidate_account_id')
+    else:
+        # For production, delete with domain
+        response.delete_cookie('candidate_id', domain='.career-easy.com')
+        response.delete_cookie('candidate_account_id', domain='.career-easy.com')
     
     return response
 
@@ -690,7 +690,7 @@ def get_candidate_info(request, candidate_id):
                                 "location": candidate.location,
                                 "country": candidate.country,
                                 "title": candidate.title,
-                                "resume": candidate.resume,
+                                # "resume": candidate.resume,
                                 "profile_pic": candidate.profile_pic,
                                 "highlights": candidate.ai_highlights}, status=200)
         return JsonResponse({"name": candidate.first_name + " " + candidate.last_name,
@@ -706,7 +706,7 @@ def get_candidate_info(request, candidate_id):
                             "resume": candidate.resume,
                             "profile_pic": candidate.profile_pic,
                             "has_original_resume": bool(candidate.original_resume_path and os.path.exists(candidate.original_resume_path)),
-                            "preferred_career_types": [career.name for career in candidate.preferred_career_types.all()]}, status=200)
+                            "preferred_career_types": [{"name": career.name, "id": career.id} for career in candidate.preferred_career_types.all()]}, status=200)
     except django.core.exceptions.ValidationError:
         return JsonResponse({"Error": "Candidate not found."}, status=404)
 
@@ -753,6 +753,7 @@ def get_posted_jobs(request):
                        'company__logo',
                        'company__location',
                        'company__country',
+                       'url',
                        'is_match').order_by('-is_match', '-posted_at')
     paginator = Paginator(jobs, page_size)
     page_obj = paginator.page(page)
@@ -762,7 +763,8 @@ def get_posted_jobs(request):
         "has_next": page_obj.has_next(),
         "has_previous": page_obj.has_previous(),
         "total_pages": paginator.num_pages,
-        "current_page": page_obj.number
+        "current_page": page_obj.number,
+        "total_count": paginator.count
     }, status=200)
 
 

@@ -3,6 +3,10 @@ export { default as Navbar } from './navigation/Navbar';
 
 // Section Components
 export { default as Hero } from './sections/Hero';
+export { default as JobsList } from './sections/JobsList';
+
+// Card Components
+export { default as JobCard } from './cards/JobCard';
 
 // Layout Components
 export { default as Footer } from './layout/Footer';

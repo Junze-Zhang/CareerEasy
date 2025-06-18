@@ -1,26 +1,114 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
+import Image from 'next/image';
+import config from '@/config';
+import { candidateAPI } from '@/services/api';
 
-const navigation = [
-  { name: 'Home', href: '#' },
-  { name: 'Jobs', href: '#jobs' },
-  { name: 'About Me', href: '#about' },
-  { name: 'CareerEasy for Business', href: '#contact' },
+interface NavigationItem {
+  name: string;
+  href: string;
+  external?: boolean;
+}
+
+const navigation: NavigationItem[] = [
+  { name: 'Home', href: '/' },
+  { name: 'Jobs', href: '/home' },
+  { name: 'About Developer', href: 'https://junzezhang.com', external: true },
+  { name: 'CareerEasy for Business', href: '/business' },
 ];
 
 interface NavbarProps {
   hideGetStarted?: boolean;
+  hideLogIn?: boolean;
+  getStartedText?: string;
 }
 
-export default function Navbar({ hideGetStarted = false }: NavbarProps) {
+export default function Navbar({ hideGetStarted = false, hideLogIn = false, getStartedText = "Get Started" }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [candidateId, setCandidateId] = useState<string | null>(null);
+  const [profilePic, setProfilePic] = useState<string | null>(null);
+  const [profilePicFetched, setProfilePicFetched] = useState(false);
   const router = useRouter();
+
+  // Check authentication status on component mount
+  useEffect(() => {
+    const checkAuth = () => {
+      if (typeof document !== 'undefined') {
+        const candidateIdCookie = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('candidate_id='))
+          ?.split('=')[1];
+        
+        const candidateAccountIdCookie = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('candidate_account_id='))
+          ?.split('=')[1];
+        
+        const isLoggedIn = candidateIdCookie && candidateAccountIdCookie;
+        setIsAuthenticated(!!isLoggedIn);
+        setCandidateId(candidateIdCookie || null);
+        
+        // Fetch profile picture if authenticated and not already fetched
+        if (isLoggedIn && candidateIdCookie && !profilePicFetched) {
+          fetchProfilePicture(candidateIdCookie);
+        } else if (!isLoggedIn) {
+          setProfilePic(null);
+          setProfilePicFetched(false);
+        }
+      }
+    };
+
+    checkAuth();
+    // Check auth status periodically in case cookies change
+    const interval = setInterval(checkAuth, 5000);
+    return () => clearInterval(interval);
+  }, [profilePicFetched]);
+
+  const fetchProfilePicture = async (candidateId: string) => {
+    try {
+      const response = await candidateAPI.candidateInfo(candidateId);
+      setProfilePic(response.data.profile_pic);
+      setProfilePicFetched(true);
+    } catch (error) {
+      console.error('Failed to fetch profile picture:', error);
+      setProfilePic(null);
+      setProfilePicFetched(true); // Mark as fetched even on error to prevent retries
+    }
+  };
 
   const handleGetStarted = () => {
     router.push('/signup');
+  };
+
+  const handleLogin = () => {
+    router.push('/login');
+  };
+
+  const handleLogout = async () => {
+    try {
+      // Call logout API (adjust URL to match your Django backend)
+      await fetch(`${config.API_BASE_URL}/candidate/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear local state and redirect
+      setIsAuthenticated(false);
+      setCandidateId(null);
+      router.push('/');
+    }
+  };
+
+  const handleProfile = () => {
+    if (candidateId) {
+      router.push(`/${candidateId}`);
+    }
   };
 
   return (
@@ -40,13 +128,15 @@ export default function Navbar({ hideGetStarted = false }: NavbarProps) {
               </div>
             </div>
 
-            {/* Desktop Navigation */}
-            <div className="hidden md:block">
+            {/* Desktop Navigation - Fixed Center Position */}
+            <div className="hidden md:block absolute left-1/2 transform -translate-x-1/2">
               <div className="flex items-center space-x-6">
                 {navigation.map((item) => (
                   <a
                     key={item.name}
                     href={item.href}
+                    target={item.external ? '_blank' : undefined}
+                    rel={item.external ? 'noopener noreferrer' : undefined}
                     className="text-comfortable hover:text-brand-navy font-medium text-sm transition-all duration-300 cursor-pointer hover:scale-105 hover:-translate-y-0.5 relative group"
                   >
                     {item.name}
@@ -59,16 +149,56 @@ export default function Navbar({ hideGetStarted = false }: NavbarProps) {
             {/* Desktop Action Buttons */}
             <div className="hidden md:block">
               <div className="flex items-center space-x-3">
-                <button className="text-comfortable hover:text-brand-navy font-medium text-sm transition-all duration-300 hover:scale-105">
-                  Log in
-                </button>
-                {!hideGetStarted && (
-                  <button 
-                    onClick={handleGetStarted}
-                    className="bg-brand-light-blue hover-bg-brand-light-blue-dark text-comfortable font-semibold text-sm py-2 px-5 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95"
-                  >
-                    Get Started
-                  </button>
+                {isAuthenticated ? (
+                  /* Authenticated state - show profile picture and logout */
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={handleProfile}
+                      className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 transition-all duration-300 hover:scale-110 flex items-center justify-center overflow-hidden"
+                    >
+                      {profilePic ? (
+                        <Image
+                          src={profilePic}
+                          alt="Profile"
+                          width={32}
+                          height={32}
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                      ) : (
+                        <span className="text-gray-600 text-sm font-medium">
+                          👤
+                        </span>
+                      )}
+                    </button>
+                    <button 
+                      onClick={handleLogout}
+                      className="text-comfortable hover:text-brand-navy font-medium text-sm transition-all duration-300 cursor-pointer hover:scale-105 hover:-translate-y-0.5 relative group"
+                    >
+                      Log out
+                      <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-brand-navy transition-all duration-300 group-hover:w-full"></span>
+                    </button>
+                  </div>
+                ) : (
+                  /* Unauthenticated state - show login/signup */
+                  <>
+                    {!hideLogIn && (
+                      <button 
+                        onClick={handleLogin}
+                        className="text-comfortable hover:text-brand-navy font-medium text-sm transition-all duration-300 cursor-pointer hover:scale-105 hover:-translate-y-0.5 relative group"
+                      >
+                        Log in
+                        <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-brand-navy transition-all duration-300 group-hover:w-full"></span>
+                      </button>
+                    )}
+                    {!hideGetStarted && (
+                      <button 
+                        onClick={handleGetStarted}
+                        className="bg-brand-light-blue hover-bg-brand-light-blue-dark text-comfortable font-semibold text-sm py-2 px-5 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95"
+                      >
+                        {getStartedText}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -95,12 +225,14 @@ export default function Navbar({ hideGetStarted = false }: NavbarProps) {
       {/* Mobile menu */}
       {mobileMenuOpen && (
         <div className="fixed top-22 left-1/2 transform -translate-x-1/2 w-full max-w-sm px-4 md:hidden z-40 animate-fadeIn">
-          <div className="bg-brand-navy-48 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-4 animate-slideDown">
+          <div className="bg-brand-light-gray-50 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-4 animate-slideDown">
             <div className="space-y-2">
               {navigation.map((item) => (
                 <a
                   key={item.name}
                   href={item.href}
+                  target={item.external ? '_blank' : undefined}
+                  rel={item.external ? 'noopener noreferrer' : undefined}
                   className="block px-4 py-2.5 text-sm font-medium text-comfortable hover:text-brand-navy hover:bg-white/30 rounded-xl transition-all duration-300 hover:scale-105 hover:translate-x-2"
                   onClick={() => setMobileMenuOpen(false)}
                 >
@@ -109,16 +241,42 @@ export default function Navbar({ hideGetStarted = false }: NavbarProps) {
               ))}
               <div className="pt-3 border-t border-gray-200">
                 <div className="flex flex-col space-y-2">
-                  <button className="text-comfortable hover:text-brand-navy font-medium text-sm py-2 transition-all duration-300 hover:scale-105">
-                    Log in
-                  </button>
-                  {!hideGetStarted && (
-                    <button 
-                      onClick={handleGetStarted}
-                      className="bg-brand-light-blue hover-bg-brand-light-blue-dark text-comfortable font-semibold text-sm py-2.5 px-5 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95"
-                    >
-                      Get Started
-                    </button>
+                  {isAuthenticated ? (
+                    /* Mobile authenticated state */
+                    <>
+                      <button 
+                        onClick={handleProfile}
+                        className="text-comfortable hover:text-brand-navy font-medium text-sm py-2 transition-all duration-300 hover:scale-105 hover:translate-x-2"
+                      >
+                        Profile
+                      </button>
+                      <button 
+                        onClick={handleLogout}
+                        className="text-comfortable hover:text-brand-navy font-medium text-sm py-2 transition-all duration-300 hover:scale-105 hover:translate-x-2"
+                      >
+                        Log out
+                      </button>
+                    </>
+                  ) : (
+                    /* Mobile unauthenticated state */
+                    <>
+                      {!hideLogIn && (
+                        <button 
+                          onClick={handleLogin}
+                          className="text-comfortable hover:text-brand-navy font-medium text-sm py-2 transition-all duration-300 hover:scale-105 hover:translate-x-2"
+                        >
+                          Log in
+                        </button>
+                      )}
+                      {!hideGetStarted && (
+                        <button 
+                          onClick={handleGetStarted}
+                          className="bg-brand-light-blue hover-bg-brand-light-blue-dark text-comfortable font-semibold text-sm py-2.5 px-5 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95"
+                        >
+                          {getStartedText}
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

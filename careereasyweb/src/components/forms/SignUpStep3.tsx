@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EyeIcon, EyeSlashIcon, CheckCircleIcon, PhotoIcon } from '@heroicons/react/24/outline';
@@ -17,8 +17,16 @@ export default function SignUpStep3() {
     updateErrors,
     updatePasswordRequirements,
     isStepValid,
+    canAccessStep,
     submitForm
   } = useSignUp();
+
+  // Check if user can access this step, redirect if not
+  useEffect(() => {
+    if (!canAccessStep(3)) {
+      router.replace('/signup/step-2');
+    }
+  }, [canAccessStep, router]);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -75,6 +83,52 @@ export default function SignUpStep3() {
     return undefined;
   };
 
+  const compressImage = (file: File): Promise<File> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      const img = new Image();
+      
+      img.onload = () => {
+        // Calculate new dimensions (max 1024x1024)
+        const maxDimension = 1024;
+        let { width, height } = img;
+        
+        if (width > height && width > maxDimension) {
+          height = (height * maxDimension) / width;
+          width = maxDimension;
+        } else if (height > maxDimension) {
+          width = (width * maxDimension) / height;
+          height = maxDimension;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw and compress
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now()
+              });
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          'image/jpeg',
+          0.8 // 80% quality
+        );
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const validateProfilePicture = (file: File | null): string | undefined => {
     if (!file) return undefined; // Profile picture is optional
     
@@ -83,26 +137,50 @@ export default function SignUpStep3() {
       return 'Please upload a valid image file (JPEG, PNG, GIF, or WebP)';
     }
     
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 5 * 1024 * 1024; // 5MB  
     if (file.size > maxSize) {
-      return 'Image file size must be less than 10MB';
+      return 'Image file size must be less than 5MB';
     }
     
     return undefined;
   };
 
-  const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfilePictureChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
     
     if (file) {
-      const error = validateProfilePicture(file);
+      // Check file type first
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        updateErrors('profilePicture', 'Please upload a valid image file (JPEG, PNG, GIF, or WebP)');
+        setProfilePreview(null);
+        updateFormData('profilePicture', null);
+        return;
+      }
+
+      let finalFile = file;
+      
+      // Compress if file is too large  
+      if (file.size > 3 * 1024 * 1024) { // 3MB
+        try {
+          finalFile = await compressImage(file);
+        } catch {
+          updateErrors('profilePicture', 'Failed to process image. Please try a different image.');
+          setProfilePreview(null);
+          updateFormData('profilePicture', null);
+          return;
+        }
+      }
+      
+      // Final validation
+      const error = validateProfilePicture(finalFile);
       updateErrors('profilePicture', error);
       
       if (!error) {
         // Create preview URL
-        const previewUrl = URL.createObjectURL(file);
+        const previewUrl = URL.createObjectURL(finalFile);
         setProfilePreview(previewUrl);
-        updateFormData('profilePicture', file);
+        updateFormData('profilePicture', finalFile);
       } else {
         setProfilePreview(null);
         updateFormData('profilePicture', null);
@@ -638,9 +716,9 @@ export default function SignUpStep3() {
                       <motion.button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="px-4 py-2 text-sm font-medium text-brand-navy border border-brand-navy rounded-lg hover:bg-brand-navy hover:text-white transition-colors duration-300"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
+                        className="px-4 py-2 text-sm font-medium text-brand-navy border border-brand-navy rounded-lg hover:bg-brand-light-blue transition-colors duration-200"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                       >
                         {profilePreview ? 'Change Photo' : 'Choose Photo'}
                       </motion.button>
@@ -648,9 +726,9 @@ export default function SignUpStep3() {
                         <motion.button
                           type="button"
                           onClick={handleRemoveProfilePicture}
-                          className="px-4 py-2 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-all duration-300"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
+                          className="px-4 py-2 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors duration-200"
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: -10 }}
@@ -660,7 +738,7 @@ export default function SignUpStep3() {
                       )}
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Upload a photo to personalize your profile. Max size: 10MB
+                      Upload a photo to personalize your profile. Large images will be automatically compressed.
                     </p>
                   </div>
                 </div>

@@ -50,7 +50,7 @@ export const candidateAPI = {
   updateProfile: (data: CandidateUpdateData): Promise<AxiosResponse<AuthResponse>> =>
     api.post('/candidate/updateprofile', data),
   
-  candidateInfo: (candidateId: number): Promise<AxiosResponse<Candidate>> =>
+  candidateInfo: (candidateId: string): Promise<AxiosResponse<Candidate>> =>
     api.get(`/candidate/${candidateId}`),
   
   uploadResume: (formData: FormData): Promise<AxiosResponse<ResumeUploadResponse>> =>
@@ -80,6 +80,11 @@ export const candidateAPI = {
   
   checkFit: (data: CheckFitData): Promise<AxiosResponse<CheckFitResponse>> =>
     api.post('/candidate/check_fit', data),
+  
+  downloadResume: (): Promise<AxiosResponse<Blob>> =>
+    api.get('/candidate/download_resume', {
+      responseType: 'blob',
+    }),
 };
 
 export const employerAPI = {

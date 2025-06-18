@@ -1,7 +1,5 @@
-import { AxiosResponse } from 'axios';
-
 // Common API response types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data: T;
   status: number;
 }
@@ -110,6 +108,7 @@ export interface JobsResponse {
   has_previous: boolean;
   total_pages: number;
   current_page: number;
+  total_count: number;
 }
 
 // Company types

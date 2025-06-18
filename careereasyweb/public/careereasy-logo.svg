@@ -1,6 +1,6 @@
 <svg width="300" height="60" viewBox="0 0 300 60" xmlns="http://www.w3.org/2000/svg">
   <!-- Background rounded square for logo mark -->
-  <rect x="5" y="5" width="50" height="50" rx="12" ry="12" fill="#1e3a8a"/>
+  <rect x="5" y="5" width="50" height="50" rx="12" ry="12" fill="#3e49ed"/>
   
   <!-- Career ladder/steps icon -->
   <g transform="translate(18, 18)">
@@ -15,5 +15,5 @@
   </g>
   
   <!-- Company name as one line -->
-  <text x="70" y="42" font-family="Poppins, sans-serif" font-size="36" font-weight="600" fill="#1e3a8a">CareerEasy</text>
+  <text x="70" y="42" font-family="Poppins, sans-serif" font-size="36" font-weight="600" fill="#3e49ed">CareerEasy</text>
 </svg>

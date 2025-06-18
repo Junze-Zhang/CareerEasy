@@ -99,6 +99,10 @@
     background-color: #8AA7FF;
   }
   
+  .hover\:bg-brand-light-blue-dark:hover {
+    background-color: #8AA7FF !important;
+  }
+  
   .hover-bg-brand-navy-dark:hover {
     background-color: #4C56E8;
   }
@@ -136,6 +140,13 @@
   
   .container-max {
     @apply max-w-7xl mx-auto;
+  }
+  
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   
   /* Custom Animations */
