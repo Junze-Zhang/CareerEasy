@@ -68,6 +68,19 @@ export const candidateAPI = {
   
   updateHighlights: (data: UpdateHighlightsData): Promise<AxiosResponse<UpdateHighlightsResponse>> =>
     api.post('/candidate/update_highlights', data),
+
+  updateProfilePicture: (formData: FormData): Promise<AxiosResponse<{Success: string, profile_pic_url: string}>> =>
+    api.post('/candidate/update_profile_picture', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }),
+
+  getAccountInfo: (): Promise<AxiosResponse<{username: string, email: string}>> =>
+    api.get('/candidate/account_info'),
+
+  updateAccountInfo: (data: {username?: string, email?: string}): Promise<AxiosResponse<{Success: string}>> =>
+    api.post('/candidate/update_account', data),
   
   getPostedJobs: (page: number = 1, pageSize: number = 20): Promise<AxiosResponse<JobsResponse>> =>
     api.get(`/candidate/jobs?page=${page}&page_size=${pageSize}`),

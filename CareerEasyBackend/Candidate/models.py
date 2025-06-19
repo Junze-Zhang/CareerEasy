@@ -8,6 +8,7 @@ class CandidateAccount(models.Model):
     username = models.CharField(max_length=100, unique=True)
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=100)
+    password_reset_token = models.TextField(null=True, blank=True)
     candidate = models.ForeignKey(
         Candidate, on_delete=models.CASCADE, null=True, blank=True)
     

@@ -14,6 +14,8 @@ urlpatterns = [
     path('job_detail/<str:job_id>', candidate_views.get_job_details),
     path('company_detail/<str:company_id>', candidate_views.get_company_details),
     path('check_fit', candidate_views.check_fit),
+    path('account_info', candidate_views.get_account_info),
+    path('update_account', candidate_views.update_account),
     path('updateprofile', candidate_views.update_profile),
     path('updatepassword', candidate_views.update_password),
     path('update_profile_picture', candidate_views.update_profile_picture),

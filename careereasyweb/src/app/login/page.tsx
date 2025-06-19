@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loginMethod, setLoginMethod] = useState<'username' | 'email'>('username');
 
   // Function to check if authentication cookies exist
   const isAuthenticated = () => {
@@ -53,6 +54,15 @@ export default function LoginPage() {
       return;
     }
 
+    // Validate email format if login method is email
+    if (loginMethod === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.username)) {
+        setError('Please enter a valid email address');
+        return;
+      }
+    }
+
     setIsLoading(true);
     setError('');
 
@@ -64,7 +74,7 @@ export default function LoginPage() {
         },
         credentials: 'include', // Include cookies for authentication
         body: JSON.stringify({
-          username: formData.username,
+          [loginMethod]: formData.username, // Send either 'username' or 'email' field
           password: formData.password,
         }),
       });
@@ -130,22 +140,63 @@ export default function LoginPage() {
             transition={{ duration: 0.8, delay: 0.4 }}
           >
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Username */}
+              {/* Login Method Toggle */}
+              <motion.div
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.5 }}
+                className="mb-6"
+              >
+                <div className="flex rounded-xl bg-gray-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginMethod('username');
+                      setFormData(prev => ({ ...prev, username: '' }));
+                      setError('');
+                    }}
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      loginMethod === 'username'
+                        ? 'bg-white text-brand-navy shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    Username
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginMethod('email');
+                      setFormData(prev => ({ ...prev, username: '' }));
+                      setError('');
+                    }}
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      loginMethod === 'email'
+                        ? 'bg-white text-brand-navy shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    Email
+                  </button>
+                </div>
+              </motion.div>
+
+              {/* Username/Email Input */}
               <motion.div
                 initial={{ x: -20, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.6 }}
               >
                 <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-                  Username
+                  {loginMethod === 'email' ? 'Email Address' : 'Username'}
                 </label>
                 <input
-                  type="text"
+                  type={loginMethod === 'email' ? 'email' : 'text'}
                   id="username"
                   value={formData.username}
                   onChange={(e) => handleInputChange('username', e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl transition-all duration-300 transform hover:scale-[1.02] focus:scale-[1.02] focus:border-brand-navy focus:ring-brand-light-blue/20 focus:ring-4 focus:outline-none"
-                  placeholder="Enter your username"
+                  placeholder={loginMethod === 'email' ? 'Enter your email address' : 'Enter your username'}
                 />
               </motion.div>
 

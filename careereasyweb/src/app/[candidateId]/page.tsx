@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -58,9 +58,25 @@ export default function ProfilePage() {
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
-  const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
+  const [isUploadingProfilePic, setIsUploadingProfilePic] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
+  const [accountForm, setAccountForm] = useState({
+    username: '',
+    email: '',
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [currentAccountInfo, setCurrentAccountInfo] = useState<{username: string, email: string} | null>(null);
+  const [accountErrors, setAccountErrors] = useState<{[key: string]: string}>({});
+  const [isUpdatingAccount, setIsUpdatingAccount] = useState(false);
+  const [passwordRequirements, setPasswordRequirements] = useState({
+    length: false,
+    uppercase: false,
+    lowercase: false,
+    number: false,
+    symbol: false
+  });
   const [careerSearchTerm, setCareerSearchTerm] = useState('');
   const [editCountry, setEditCountry] = useState('Select country');
   const [editState, setEditState] = useState('');
@@ -70,11 +86,57 @@ export default function ProfilePage() {
   const [personalErrors, setPersonalErrors] = useState<{[key: string]: string}>({});
   const [isPersonalFormValidState, setIsPersonalFormValidState] = useState(true);
 
+  // Memoized validation results to prevent infinite re-renders
+  const isAccountInfoUpdateValid = useMemo(() => {
+    // Check if there are any changes and they are valid
+    const hasUsernameChange = accountForm.username.trim() !== '' && accountForm.username !== currentAccountInfo?.username;
+    const hasEmailChange = accountForm.email.trim() !== '' && accountForm.email !== currentAccountInfo?.email;
+    const hasChanges = hasUsernameChange || hasEmailChange;
+    
+    if (!hasChanges) return false;
+    
+    // Check for validation errors
+    if (accountForm.username.trim() !== '' && accountForm.username.length < 3) return false;
+    if (accountForm.email.trim() !== '') {
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailRegex.test(accountForm.email)) return false;
+    }
+    
+    return true;
+  }, [accountForm.username, accountForm.email, currentAccountInfo?.username, currentAccountInfo?.email]);
+
+  const isPasswordUpdateValid = useMemo(() => {
+    // All fields must be filled
+    if (!accountForm.oldPassword || !accountForm.newPassword || !accountForm.confirmPassword) return false;
+    
+    // Password must meet requirements - calculate requirements without triggering state updates
+    const reqs = {
+      length: accountForm.newPassword.length >= 6,
+      uppercase: /[A-Z]/.test(accountForm.newPassword),
+      lowercase: /[a-z]/.test(accountForm.newPassword),
+      number: /[0-9]/.test(accountForm.newPassword),
+      symbol: /[!@#$%^&*(),.?\":{}|<>]/.test(accountForm.newPassword)
+    };
+    const optionalReqs = { uppercase: reqs.uppercase, lowercase: reqs.lowercase, number: reqs.number, symbol: reqs.symbol };
+    const metRequirements = Object.values(optionalReqs).filter(Boolean).length;
+    
+    if (accountForm.newPassword.length < 6) return false;
+    if (metRequirements < 2) return false;
+    
+    // Passwords must match
+    if (accountForm.newPassword !== accountForm.confirmPassword) return false;
+    
+    return true;
+  }, [accountForm.oldPassword, accountForm.newPassword, accountForm.confirmPassword]);
+
   useEffect(() => {
     fetchProfile();
     checkIsOwnProfile();
     fetchCareers();
-  }, [candidateId]);
+    if (isOwnProfile) {
+      fetchAccountInfo();
+    }
+  }, [candidateId, isOwnProfile]);
 
   // Update validation when entering edit mode
   useEffect(() => {
@@ -90,7 +152,31 @@ export default function ProfilePage() {
         .find(row => row.startsWith('candidate_id='))
         ?.split('=')[1];
       
-      setIsOwnProfile(candidateIdCookie === candidateId);
+      const isOwn = candidateIdCookie === candidateId;
+      setIsOwnProfile(isOwn);
+      if (isOwn) {
+        fetchAccountInfo();
+      }
+    }
+  };
+
+  const fetchAccountInfo = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/candidate/account_info', {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentAccountInfo(data);
+        // Set form defaults to current values
+        setAccountForm(prev => ({
+          ...prev,
+          username: data.username,
+          email: data.email
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch account info:', err);
     }
   };
 
@@ -119,7 +205,8 @@ export default function ProfilePage() {
       // Note: We don't have separate state/city fields in the current data structure
       // so we'll parse them from location when needed
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      const errorMessage = handleApiError(err, 'An error occurred');
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -219,11 +306,6 @@ export default function ProfilePage() {
           }
         }
         // Note: If country is "Select country", we don't send location or country data
-        // Handle profile picture upload if changed
-        if (profilePicFile) {
-          // Note: Profile picture upload would need form data and different API endpoint
-          // This is a placeholder for the profile picture upload logic
-        }
       } else if (section === 'experience') {
         const totalMonths = parseInt(experienceYears.toString()) * 12 + parseInt(experienceMonths.toString());
         if (totalMonths !== originalValues.experience_months) {
@@ -280,7 +362,8 @@ export default function ProfilePage() {
       setHasChanges(prev => ({ ...prev, [section]: false }));
       setEditingSections(prev => ({ ...prev, [section]: false }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save changes');
+      const errorMessage = handleApiError(err, 'Failed to save changes');
+      setError(errorMessage);
     }
   };
   
@@ -304,8 +387,6 @@ export default function ProfilePage() {
       setEditCountry('Select country');
       setEditState('');
       setEditCity('');
-      setProfilePicFile(null);
-      setProfilePicPreview(null);
     } else if (section === 'experience') {
       const totalMonths = originalValues.experience_months || 0;
       const years = Math.floor(totalMonths / 12);
@@ -345,7 +426,8 @@ export default function ProfilePage() {
       setProfile(prev => prev ? { ...prev, highlights: newHighlights } : null);
       setEditForm(prev => ({ ...prev, highlights: newHighlights }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update highlights');
+      const errorMessage = handleApiError(err, 'Failed to update highlights');
+      setError(errorMessage);
     } finally {
       setIsUpdatingHighlights(false);
     }
@@ -421,13 +503,14 @@ export default function ProfilePage() {
     );
   }
 
-  if (error || !profile) {
+  // Only show full page error for critical issues (profile not found), not for operation errors
+  if (!profile && !loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-sky-50">
         <Navbar />
         <div className="flex items-center justify-center pt-32">
           <div className="text-center">
-            <p className="text-red-600 mb-4">{error || 'Profile not found'}</p>
+            <p className="text-red-600 mb-4">Profile not found</p>
             <Link href="/" className="text-brand-navy hover:underline">
               Return to home
             </Link>
@@ -435,6 +518,11 @@ export default function ProfilePage() {
         </div>
       </div>
     );
+  }
+
+  // Guard clause - if we reach here, profile should be available
+  if (!profile) {
+    return null;
   }
 
   // Validation functions from signup forms would be used if we add client-side validation
@@ -454,18 +542,42 @@ export default function ProfilePage() {
   const handleProfilePicChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setProfilePicFile(file);
-      const previewUrl = URL.createObjectURL(file);
-      setProfilePicPreview(previewUrl);
-      setHasChanges(prev => ({ ...prev, personal: true }));
+      try {
+        setIsUploadingProfilePic(true);
+        
+        // Create form data for upload
+        const formData = new FormData();
+        formData.append('profile_pic', file);
+        
+        // Upload to backend
+        const response = await candidateAPI.updateProfilePicture(formData);
+        
+        // Get the profile picture URL from the response
+        const newProfilePicUrl = response.data.profile_pic_url;
+        
+        if (newProfilePicUrl && newProfilePicUrl.trim() !== '') {
+          // Update profile with new picture URL
+          setProfile(prev => {
+            if (!prev) return null;
+            return { ...prev, profile_pic: newProfilePicUrl };
+          });
+        } else {
+          throw new Error('Failed to get valid profile picture URL from server');
+        }
+        
+        // Show success notification
+        setNotification({ message: 'Profile picture updated successfully!' });
+        setTimeout(() => setNotification(null), 3000);
+        
+      } catch (err) {
+        const errorMessage = handleApiError(err, 'Failed to upload profile picture');
+        setError(errorMessage);
+      } finally {
+        setIsUploadingProfilePic(false);
+      }
     }
   };
 
-  const removeProfilePic = () => {
-    setProfilePicFile(null);
-    setProfilePicPreview(null);
-    setHasChanges(prev => ({ ...prev, personal: true }));
-  };
 
   const updateFullName = () => {
     const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
@@ -629,20 +741,306 @@ export default function ProfilePage() {
     updatePersonalFormValidation({ city: value });
   };
 
+  // Helper function for consistent error handling
+  const handleApiError = (err: unknown, fallbackMessage: string): string => {
+    if (err && typeof err === 'object' && 'response' in err) {
+      const axiosError = err as { response?: { status: number; data?: { Error?: string; error?: string } } };
+      if (axiosError.response && axiosError.response.status >= 400 && axiosError.response.status < 500) {
+        return axiosError.response.data?.Error || axiosError.response.data?.error || fallbackMessage;
+      }
+    }
+    if (err instanceof Error) {
+      return err.message;
+    }
+    return fallbackMessage;
+  };
+
+  // Account management functions
+  const checkPasswordRequirements = (password: string) => {
+    const requirements = {
+      length: password.length >= 6,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      number: /[0-9]/.test(password),
+      symbol: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    };
+    setPasswordRequirements(requirements);
+    return requirements;
+  };
+
+  const validateAccountForm = () => {
+    const errors: {[key: string]: string} = {};
+
+    // Username validation (if provided)
+    if (accountForm.username && accountForm.username.length < 3) {
+      errors.username = 'Username must be at least 3 characters';
+    }
+
+    // Email validation (if provided)
+    if (accountForm.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(accountForm.email)) {
+        errors.email = 'Please enter a valid email address';
+      }
+    }
+
+    // Password validation (if changing password)
+    if (accountForm.newPassword || accountForm.oldPassword || accountForm.confirmPassword) {
+      if (!accountForm.oldPassword) {
+        errors.oldPassword = 'Current password is required';
+      }
+      if (!accountForm.newPassword) {
+        errors.newPassword = 'New password is required';
+      } else {
+        const reqs = checkPasswordRequirements(accountForm.newPassword);
+        if (!Object.values(reqs).every(Boolean)) {
+          errors.newPassword = 'Password does not meet requirements';
+        }
+      }
+      if (accountForm.newPassword !== accountForm.confirmPassword) {
+        errors.confirmPassword = 'Passwords do not match';
+      }
+    }
+
+    setAccountErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateAccountInfo = (updateErrors = true) => {
+    const errors: {[key: string]: string} = {};
+    
+    // Only show error if field has content and is invalid
+    if (accountForm.username && accountForm.username.trim() !== '' && accountForm.username.length < 3) {
+      errors.username = 'Username must be at least 3 characters';
+    }
+    
+    if (accountForm.email && accountForm.email.trim() !== '') {
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailRegex.test(accountForm.email)) {
+        errors.email = 'Please enter a valid email address';
+      }
+    }
+    
+    if (updateErrors) {
+      setAccountErrors(prev => ({ ...prev, ...errors }));
+    }
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleAccountInfoUpdate = async () => {
+    // For submission, check if required fields are provided
+    const errors: {[key: string]: string} = {};
+    
+    if (accountForm.username && accountForm.username.trim() !== '' && accountForm.username.length < 3) {
+      errors.username = 'Username must be at least 3 characters';
+    }
+    
+    if (accountForm.email && accountForm.email.trim() !== '') {
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailRegex.test(accountForm.email)) {
+        errors.email = 'Please enter a valid email address';
+      }
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setAccountErrors(prev => ({ ...prev, ...errors }));
+      return;
+    }
+
+    setIsUpdatingAccount(true);
+    try {
+      const updateData: {username?: string, email?: string} = {};
+      
+      // Only include fields that have been changed from current values
+      if (accountForm.username.trim() && accountForm.username.trim() !== currentAccountInfo?.username) {
+        updateData.username = accountForm.username.trim();
+      }
+      if (accountForm.email.trim() && accountForm.email.trim() !== currentAccountInfo?.email) {
+        updateData.email = accountForm.email.trim();
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await candidateAPI.updateAccountInfo(updateData);
+        setNotification({ message: 'Account information updated successfully!' });
+        setTimeout(() => setNotification(null), 3000);
+        
+        // Refresh account info
+        await fetchAccountInfo();
+      } else {
+        setNotification({ message: 'No changes to save.' });
+        setTimeout(() => setNotification(null), 3000);
+      }
+    } catch (err) {
+      const errorMessage = handleApiError(err, 'Failed to update account information');
+      setError(errorMessage);
+    } finally {
+      setIsUpdatingAccount(false);
+    }
+  };
+
+  const validatePasswordForm = (newPassword?: string, confirmPassword?: string) => {
+    const password = newPassword ?? accountForm.newPassword;
+    const confirm = confirmPassword ?? accountForm.confirmPassword;
+    const errors: {[key: string]: string} = {};
+    
+    // Only validate password fields if they have content
+    if (password && password.trim() !== '') {
+      const reqs = checkPasswordRequirements(password);
+      // Remove length from optional requirements count
+      const optionalReqs = { uppercase: reqs.uppercase, lowercase: reqs.lowercase, number: reqs.number, symbol: reqs.symbol };
+      const metRequirements = Object.values(optionalReqs).filter(Boolean).length;
+      
+      if (password.length < 6) {
+        errors.newPassword = 'Password must be at least 6 characters';
+      } else if (metRequirements < 2) {
+        errors.newPassword = 'Password must meet at least 2 additional requirements';
+      } else {
+        // Clear error if password is valid
+        setAccountErrors(prev => ({ ...prev, newPassword: '' }));
+      }
+    }
+    
+    // Only validate confirm password if both passwords have content
+    if (password && confirm && password !== confirm) {
+      errors.confirmPassword = 'Passwords do not match';
+    } else if (password && confirm && password === confirm) {
+      // Clear error if passwords match
+      setAccountErrors(prev => ({ ...prev, confirmPassword: '' }));
+    }
+    
+    // Set errors if any exist
+    if (Object.keys(errors).length > 0) {
+      setAccountErrors(prev => ({ ...prev, ...errors }));
+    }
+    
+    return Object.keys(errors).length === 0;
+  };
+
+  const handlePasswordUpdate = async () => {
+    // For submission, validate required fields
+    const errors: {[key: string]: string} = {};
+    
+    if (!accountForm.oldPassword) {
+      errors.oldPassword = 'Current password is required';
+    }
+    if (!accountForm.newPassword) {
+      errors.newPassword = 'New password is required';
+    } else {
+      const reqs = checkPasswordRequirements(accountForm.newPassword);
+      // Remove length from optional requirements count - it's a hard requirement
+      const optionalReqs = { uppercase: reqs.uppercase, lowercase: reqs.lowercase, number: reqs.number, symbol: reqs.symbol };
+      const metRequirements = Object.values(optionalReqs).filter(Boolean).length;
+      
+      if (accountForm.newPassword.length < 6) {
+        errors.newPassword = 'Password must be at least 6 characters';
+      } else if (metRequirements < 2) {
+        errors.newPassword = 'Password must meet at least 2 additional requirements';
+      }
+    }
+    if (accountForm.newPassword !== accountForm.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setAccountErrors(prev => ({ ...prev, ...errors }));
+      return;
+    }
+
+    setIsUpdatingAccount(true);
+    try {
+      await candidateAPI.updatePassword({
+        old_password: accountForm.oldPassword,
+        new_password: accountForm.newPassword
+      });
+
+      setNotification({ message: 'Password updated successfully!' });
+      setTimeout(() => setNotification(null), 3000);
+      
+      // Clear password fields
+      setAccountForm(prev => ({
+        ...prev,
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }));
+      setAccountErrors({});
+    } catch (err) {
+      const errorMessage = handleApiError(err, 'Failed to update password');
+      setError(errorMessage);
+    } finally {
+      setIsUpdatingAccount(false);
+    }
+  };
+
   // Filter careers based on search term
   const filteredCareers = allCareers.filter(career =>
     career.name.toLowerCase().includes(careerSearchTerm.toLowerCase())
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-sky-50 relative overflow-hidden">
-      <AbstractLines />
-      <Navbar />
+    <>
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes fadeInLeft {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        @keyframes fadeInRight {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        @keyframes fadeInDown {
+          from {
+            opacity: 0;
+            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fade-in-up {
+          animation: fadeInUp 0.6s ease-out forwards;
+        }
+        .animate-fade-in-left {
+          animation: fadeInLeft 0.6s ease-out forwards;
+        }
+        .animate-fade-in-right {
+          animation: fadeInRight 0.6s ease-out forwards;
+        }
+        .animate-fade-in-down {
+          animation: fadeInDown 0.4s ease-out forwards;
+        }
+      `}</style>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-sky-50 relative overflow-hidden">
+        <AbstractLines />
+        <Navbar />
       
       <main className="pt-24 pb-16 relative z-10">
         <div className="max-w-4xl mx-auto px-4">
           {/* Profile Header */}
-          <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
+          <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 opacity-0 translate-y-4 animate-fade-in-up hover:shadow-2xl transition-shadow" style={{animationDelay: '100ms'}}>
             <div className="flex items-center justify-between mb-6">
               <h1 className="text-2xl font-bold text-comfortable">{profile.name}</h1>
               <div className="flex items-center gap-2">
@@ -688,38 +1086,8 @@ export default function ProfilePage() {
             <div className="flex flex-col md:flex-row items-start gap-6">
               {/* Profile Picture */}
               <div className="flex-shrink-0">
-                <div className="w-24 h-24 relative">
-                  {editingSections.personal && isOwnProfile ? (
-                    <div className="relative">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleProfilePicChange}
-                        className="hidden"
-                        id="profile-pic-upload"
-                      />
-                      <label
-                        htmlFor="profile-pic-upload"
-                        className="cursor-pointer block w-24 h-24 rounded-full border-2 border-dashed border-gray-300 hover:border-brand-light-blue transition-colors flex items-center justify-center bg-gray-50 hover:bg-gray-100"
-                      >
-                        <Image
-                          src={profilePicPreview || profile.profile_pic}
-                          alt={`${profile.name} profile`}
-                          fill
-                          className="object-cover rounded-full opacity-75 hover:opacity-90 transition-opacity"
-                          sizes="96px"
-                        />
-                      </label>
-                      {profilePicPreview && (
-                        <button
-                          onClick={removeProfilePic}
-                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  ) : (
+                <div className="w-24 h-24 relative group">
+                  {profile.profile_pic && profile.profile_pic.trim() !== '' ? (
                     <Image
                       src={profile.profile_pic}
                       alt={`${profile.name} profile`}
@@ -727,6 +1095,37 @@ export default function ProfilePage() {
                       className="object-cover rounded-full"
                       sizes="96px"
                     />
+                  ) : (
+                    <div className="w-24 h-24 rounded-full bg-gray-300 flex items-center justify-center">
+                      <span className="text-gray-600 text-sm">No Image</span>
+                    </div>
+                  )}
+                  
+                  {/* Edit overlay for profile owner */}
+                  {isOwnProfile && (
+                    <>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleProfilePicChange}
+                        className="hidden"
+                        id="profile-pic-upload-standalone"
+                        disabled={isUploadingProfilePic}
+                      />
+                      <label
+                        htmlFor="profile-pic-upload-standalone"
+                        className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white text-xs py-1 text-center cursor-pointer rounded-b-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                      >
+                        {isUploadingProfilePic ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
+                            <span>Uploading...</span>
+                          </div>
+                        ) : (
+                          'Edit'
+                        )}
+                      </label>
+                    </>
                   )}
                 </div>
               </div>
@@ -948,11 +1347,47 @@ export default function ProfilePage() {
             </div>
           </div>
 
+          {/* Highlights */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 opacity-0 translate-y-4 animate-fade-in-up hover:shadow-2xl transition-shadow" style={{animationDelay: '200ms'}}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-comfortable">Highlights</h2>
+              {isOwnProfile && (
+                <button
+                  onClick={() => setShowPromptPopup(true)}
+                  disabled={isUpdatingHighlights}
+                  className="bg-brand-light-blue hover:bg-brand-light-blue-dark text-black px-4 py-2 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isUpdatingHighlights ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
+                      Updating. This can take up to 3 minutes...
+                    </>
+                  ) : (
+                    'Regenerate with AI'
+                  )}
+                </button>
+              )}
+            </div>
+            
+            {profile.highlights && profile.highlights.length > 0 ? (
+              <ul className="space-y-2">
+                {profile.highlights.map((highlight, index) => (
+                  <li key={index} className="flex items-start gap-2">
+                    <span className="text-brand-light-blue font-bold">•</span>
+                    <span className="text-gray-700">{highlight}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500">No highlights available</p>
+            )}
+          </div>
+
           {/* Additional Information (Own Profile Only) */}
           {isOwnProfile && profile.experience_months !== undefined && (
             <>
               {/* Account Management Card - Mobile first, then desktop positioning */}
-              <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 md:hidden space-y-6">
+              <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 md:hidden space-y-6 opacity-0 translate-y-4 animate-fade-in-up hover:shadow-2xl transition-shadow" style={{animationDelay: '300ms'}}>
                 <h2 className="text-lg font-bold text-comfortable leading-none">Account Management</h2>
                 <div className="flex justify-center py-3">
                   <button
@@ -968,7 +1403,7 @@ export default function ProfilePage() {
                 {/* Left Column - Desktop: Account Management + Experience, Mobile: Just Experience */}
                 <div className="flex flex-col gap-6 h-full">
                   {/* Account Management Card - Desktop only */}
-                  <div className="hidden md:block bg-white rounded-2xl shadow-xl p-6 space-y-6">
+                  <div className="hidden md:block bg-white rounded-2xl shadow-xl p-6 space-y-6 opacity-0 animate-fade-in-left hover:shadow-2xl transition-shadow" style={{animationDelay: '400ms'}}>
                     <h2 className="text-lg font-bold text-comfortable leading-none">Account Management</h2>
                     <div className="flex justify-center py-3">
                       <button
@@ -980,7 +1415,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 {/* Experience & Education */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 flex-1 flex flex-col group">
+                <div className="bg-white rounded-2xl shadow-xl p-6 flex-1 flex flex-col group opacity-0 animate-fade-in-left hover:shadow-2xl transition-shadow" style={{animationDelay: '500ms'}}>
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-bold text-comfortable leading-none">Experience & Education</h2>
                     <div className="flex items-center gap-2">
@@ -1127,7 +1562,7 @@ export default function ProfilePage() {
               </div>
 
               {/* Right Column - Skills (matches left column height) */}
-              <div className="bg-white rounded-2xl shadow-xl p-6 flex flex-col group">
+              <div className="bg-white rounded-2xl shadow-xl p-6 flex flex-col group opacity-0 animate-fade-in-right hover:shadow-2xl transition-shadow" style={{animationDelay: '500ms'}}>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-bold text-comfortable leading-none">Skills</h2>
                   <div className="flex items-center gap-2">
@@ -1212,45 +1647,10 @@ export default function ProfilePage() {
               </div>
             </div>
 
-          {/* Highlights */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-comfortable">Highlights</h2>
-              {isOwnProfile && (
-                <button
-                  onClick={() => setShowPromptPopup(true)}
-                  disabled={isUpdatingHighlights}
-                  className="bg-brand-light-blue hover:bg-brand-light-blue-dark text-black px-4 py-2 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {isUpdatingHighlights ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
-                      Updating...
-                    </>
-                  ) : (
-                    'Regenerate with AI'
-                  )}
-                </button>
-              )}
-            </div>
-            
-            {profile.highlights && profile.highlights.length > 0 ? (
-              <ul className="space-y-2">
-                {profile.highlights.map((highlight, index) => (
-                  <li key={index} className="flex items-start gap-2">
-                    <span className="text-brand-light-blue font-bold">•</span>
-                    <span className="text-gray-700">{highlight}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-gray-500">No highlights available</p>
-            )}
-          </div>
 
           {/* Career Preferences (Own Profile Only) */}
           {profile.preferred_career_types && (
-            <div className="bg-white rounded-2xl shadow-xl p-6 group">
+            <div className="bg-white rounded-2xl shadow-xl p-6 group opacity-0 translate-y-4 animate-fade-in-up hover:shadow-2xl transition-shadow" style={{animationDelay: '600ms'}}>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-comfortable">Career Interests</h2>
                 <div className="flex items-center gap-2">
@@ -1381,13 +1781,269 @@ export default function ProfilePage() {
       {/* Account Management Modal */}
       {showAccountModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-comfortable mb-4">Account Management</h3>
-            <p className="text-gray-600 mb-6">Account management features will be implemented later.</p>
-            <div className="flex justify-end">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-comfortable mb-6">Account Management</h3>
+            
+            <div className="space-y-6">
+              {/* Username */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={accountForm.username}
+                  onChange={(e) => {
+                    const newUsername = e.target.value;
+                    setAccountForm(prev => ({ ...prev, username: newUsername }));
+                    
+                    // Clear error if field becomes empty
+                    if (newUsername.trim() === '') {
+                      setAccountErrors(prev => ({ ...prev, username: '' }));
+                    } else {
+                      // Validate immediately with current value
+                      if (newUsername.length < 3) {
+                        setAccountErrors(prev => ({ ...prev, username: 'Username must be at least 3 characters' }));
+                      } else {
+                        setAccountErrors(prev => ({ ...prev, username: '' }));
+                      }
+                    }
+                  }}
+                  className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-brand-navy focus:ring-4 focus:ring-brand-light-blue/20 ${
+                    accountErrors.username ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder={currentAccountInfo ? `Current: ${currentAccountInfo.username}` : "Enter username"}
+                />
+                {accountErrors.username && (
+                  <p className="mt-1 text-sm text-red-600">{accountErrors.username}</p>
+                )}
+              </div>
+
+              {/* Account Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Account Email
+                  <span className="text-gray-500 text-xs block">Your account login email, not profile email</span>
+                </label>
+                <input
+                  type="email"
+                  value={accountForm.email}
+                  onChange={(e) => {
+                    const newEmail = e.target.value;
+                    setAccountForm(prev => ({ ...prev, email: newEmail }));
+                    
+                    // Clear error if field becomes empty
+                    if (newEmail.trim() === '') {
+                      setAccountErrors(prev => ({ ...prev, email: '' }));
+                    } else {
+                      // Validate immediately with current value
+                      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                      if (!emailRegex.test(newEmail)) {
+                        setAccountErrors(prev => ({ ...prev, email: 'Please enter a valid email address' }));
+                      } else {
+                        setAccountErrors(prev => ({ ...prev, email: '' }));
+                      }
+                    }
+                  }}
+                  className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-brand-navy focus:ring-4 focus:ring-brand-light-blue/20 ${
+                    accountErrors.email ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder={currentAccountInfo ? `Current: ${currentAccountInfo.email}` : "Enter email"}
+                />
+                {accountErrors.email && (
+                  <p className="mt-1 text-sm text-red-600">{accountErrors.email}</p>
+                )}
+              </div>
+
+              {/* Update Username/Email Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={handleAccountInfoUpdate}
+                  disabled={isUpdatingAccount || !isAccountInfoUpdateValid}
+                  className={`px-4 py-2 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isAccountInfoUpdateValid && !isUpdatingAccount
+                      ? 'bg-brand-light-blue hover:bg-brand-light-blue-dark text-black'
+                      : 'bg-gray-300 text-gray-500'
+                  }`}
+                >
+                  {isUpdatingAccount ? 'Updating...' : 'Update Account Info'}
+                </button>
+              </div>
+
+              {/* Password Change Section */}
+              <div className="border-t pt-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Change Password</h4>
+                
+                {/* Current Password */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    value={accountForm.oldPassword}
+                    onChange={(e) => {
+                      setAccountForm(prev => ({ ...prev, oldPassword: e.target.value }));
+                      // Clear error if field becomes empty
+                      if (e.target.value.trim() === '') {
+                        setAccountErrors(prev => ({ ...prev, oldPassword: '' }));
+                      }
+                    }}
+                    className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-brand-navy focus:ring-4 focus:ring-brand-light-blue/20 ${
+                      accountErrors.oldPassword ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Leave empty to keep current password"
+                  />
+                  {accountErrors.oldPassword && (
+                    <p className="mt-1 text-sm text-red-600">{accountErrors.oldPassword}</p>
+                  )}
+                </div>
+
+                {/* New Password */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={accountForm.newPassword}
+                    onChange={(e) => {
+                      const newPassword = e.target.value;
+                      setAccountForm(prev => ({ ...prev, newPassword }));
+                      
+                      // Clear error if field becomes empty
+                      if (newPassword.trim() === '') {
+                        setAccountErrors(prev => ({ ...prev, newPassword: '' }));
+                        setPasswordRequirements({
+                          length: false,
+                          uppercase: false,
+                          lowercase: false,
+                          number: false,
+                          symbol: false
+                        });
+                      } else {
+                        // Validate immediately with current value
+                        validatePasswordForm(newPassword);
+                      }
+                    }}
+                    className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-brand-navy focus:ring-4 focus:ring-brand-light-blue/20 ${
+                      accountErrors.newPassword ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter new password"
+                  />
+                  {accountErrors.newPassword && (
+                    <p className="mt-1 text-sm text-red-600">{accountErrors.newPassword}</p>
+                  )}
+
+                  {/* Password Requirements */}
+                  {accountForm.newPassword && (
+                    <div className="mt-2 space-y-1">
+                      <div className="mb-2">
+                        <div className={`flex items-center text-xs ${
+                          passwordRequirements.length ? 'text-green-600' : 'text-red-500'
+                        }`}>
+                          <span className="mr-1">{passwordRequirements.length ? '✓' : '✗'}</span>
+                          At least 6 characters
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600">Plus at least 2 of the following:</p>
+                      <div className="grid grid-cols-2 gap-1 text-xs">
+                        <div className={`flex items-center ${passwordRequirements.uppercase ? 'text-green-600' : 'text-gray-400'}`}>
+                          <span className="mr-1">{passwordRequirements.uppercase ? '✓' : '○'}</span>
+                          Uppercase letter
+                        </div>
+                        <div className={`flex items-center ${passwordRequirements.lowercase ? 'text-green-600' : 'text-gray-400'}`}>
+                          <span className="mr-1">{passwordRequirements.lowercase ? '✓' : '○'}</span>
+                          Lowercase letter
+                        </div>
+                        <div className={`flex items-center ${passwordRequirements.number ? 'text-green-600' : 'text-gray-400'}`}>
+                          <span className="mr-1">{passwordRequirements.number ? '✓' : '○'}</span>
+                          Number
+                        </div>
+                        <div className={`flex items-center ${passwordRequirements.symbol ? 'text-green-600' : 'text-gray-400'}`}>
+                          <span className="mr-1">{passwordRequirements.symbol ? '✓' : '○'}</span>
+                          Special character
+                        </div>
+                      </div>
+                      <p className={`text-xs mt-1 ${
+                        (() => {
+                          const optionalMet = [passwordRequirements.uppercase, passwordRequirements.lowercase, passwordRequirements.number, passwordRequirements.symbol].filter(Boolean).length;
+                          return optionalMet >= 2 && passwordRequirements.length ? 'text-green-600' : 'text-gray-500';
+                        })()
+                      }`}>
+                        {[passwordRequirements.uppercase, passwordRequirements.lowercase, passwordRequirements.number, passwordRequirements.symbol].filter(Boolean).length}/4 optional requirements met
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Confirm Password */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={accountForm.confirmPassword}
+                    onChange={(e) => {
+                      const confirmPassword = e.target.value;
+                      setAccountForm(prev => ({ ...prev, confirmPassword }));
+                      
+                      // Clear error if field becomes empty
+                      if (confirmPassword.trim() === '') {
+                        setAccountErrors(prev => ({ ...prev, confirmPassword: '' }));
+                      } else {
+                        // Validate immediately with current value
+                        validatePasswordForm(accountForm.newPassword, confirmPassword);
+                      }
+                    }}
+                    className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-brand-navy focus:ring-4 focus:ring-brand-light-blue/20 ${
+                      accountErrors.confirmPassword ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Confirm new password"
+                  />
+                  {accountErrors.confirmPassword && (
+                    <p className="mt-1 text-sm text-red-600">{accountErrors.confirmPassword}</p>
+                  )}
+                </div>
+                
+                {/* Update Password Button */}
+                <div className="flex justify-end mt-4">
+                  <button
+                    onClick={handlePasswordUpdate}
+                    disabled={isUpdatingAccount || !isPasswordUpdateValid}
+                    className={`px-4 py-2 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      isPasswordUpdateValid && !isUpdatingAccount
+                        ? 'bg-brand-light-blue hover:bg-brand-light-blue-dark text-black'
+                        : 'bg-gray-300 text-gray-500'
+                    }`}
+                  >
+                    {isUpdatingAccount ? 'Updating...' : 'Update Password'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Close Button */}
+            <div className="flex justify-end mt-8">
               <button
-                onClick={() => setShowAccountModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => {
+                  setShowAccountModal(false);
+                  // Reset form to current values
+                  if (currentAccountInfo) {
+                    setAccountForm(prev => ({
+                      ...prev,
+                      username: currentAccountInfo.username,
+                      email: currentAccountInfo.email,
+                      oldPassword: '',
+                      newPassword: '',
+                      confirmPassword: ''
+                    }));
+                  }
+                  setAccountErrors({});
+                }}
+                className="px-6 py-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+                disabled={isUpdatingAccount}
               >
                 Close
               </button>
@@ -1459,6 +2115,31 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* Error Modal */}
+      {error && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 opacity-0 -translate-y-4 animate-fade-in-down">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl border border-gray-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Error</h3>
+            </div>
+            <p className="text-gray-700 mb-6">{error}</p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setError(null)}
+                className="bg-brand-light-blue hover:bg-brand-light-blue-dark text-black px-4 py-2 rounded-xl transition-colors"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Notification */}
       {notification && (
         <div className="fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3">
@@ -1482,6 +2163,7 @@ export default function ProfilePage() {
           </button>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

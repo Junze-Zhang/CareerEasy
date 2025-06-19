@@ -450,7 +450,7 @@ def update_highlights(request):
         'application/json': {
             'type': 'object',
             'properties': {
-                'username': {'type': 'string', 'description': 'Username'},
+                'username': {'type': 'string', 'description': 'Username or email address'},
                 'password': {'type': 'string', 'description': 'Account password'}
             },
             'required': ['username', 'password']
@@ -467,11 +467,16 @@ def log_in(request):
     data = request.data
     username = data.get('username')
     password = data.get('password')
+    email = data.get('email')
 
     if not all([username, password]):
         return JsonResponse({"Error": "Missing required fields."}, status=400)
 
+    # Try to find account by username first, then by email
     account = CandidateAccount.objects.filter(username=username).first()
+    if account is None:
+        account = CandidateAccount.objects.filter(email=username).first()
+    
     if account is None:
         return JsonResponse({"Error": "Invalid username or password."}, status=401)
 
@@ -569,10 +574,11 @@ def update_password(request):
     if account is None:
         return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
 
-    if not checkpw(old_password.encode('utf8'), account.password):
+    if not checkpw(old_password.encode('utf8'), account.password.encode('utf8')):
         return JsonResponse({"Error": "Incorrect old password."}, status=401)
 
-    account.password = hashpw(new_password.encode('utf8'), gensalt())
+    encrypted_password = hashpw(new_password.encode('utf8'), gensalt())
+    account.password = encrypted_password.decode('utf8')
     account.save()
     return JsonResponse({"Success": "Password updated successfully."}, status=200)
 
@@ -627,6 +633,86 @@ def update_profile_picture(request):
 
     except Exception as e:
         return JsonResponse({"Error": f"Profile picture upload failed: {str(e)}"}, status=400)
+
+
+@extend_schema(
+    tags=['Candidate Account Management'],
+    description='Get candidate account information (username and email)',
+    responses={
+        200: OpenApiTypes.OBJECT,
+        401: OpenApiTypes.OBJECT
+    }
+)
+@api_view(['GET'])
+def get_account_info(request):
+    account_id = request.COOKIES.get('candidate_account_id')
+    
+    if not account_id:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    account = CandidateAccount.objects.filter(id=account_id).first()
+    if account is None:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    return JsonResponse({
+        "username": account.username,
+        "email": account.email
+    }, status=200)
+
+
+@extend_schema(
+    tags=['Candidate Account Management'],
+    description='Update candidate account information (username and email)',
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'username': {'type': 'string', 'description': 'New username'},
+                'email': {'type': 'string', 'format': 'email', 'description': 'New email address'}
+            }
+        }
+    },
+    responses={
+        200: OpenApiTypes.OBJECT,
+        400: OpenApiTypes.OBJECT,
+        401: OpenApiTypes.OBJECT,
+        409: OpenApiTypes.OBJECT
+    }
+)
+@api_view(['POST'])
+def update_account(request):
+    data = request.data
+    account_id = request.COOKIES.get('candidate_account_id')
+    username = data.get('username')
+    email = data.get('email')
+
+    if not account_id:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    account = CandidateAccount.objects.filter(id=account_id).first()
+    if account is None:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    # Check username availability (excluding current account)
+    if username is not None:
+        if username.strip() == "":
+            return JsonResponse({"Error": "Username cannot be empty."}, status=400)
+        existing_username = CandidateAccount.objects.filter(username=username).exclude(id=account_id).first()
+        if existing_username:
+            return JsonResponse({"Error": "Username is already taken."}, status=409)
+        account.username = username
+
+    # Check email availability (excluding current account)
+    if email is not None:
+        if email.strip() == "":
+            return JsonResponse({"Error": "Email cannot be empty."}, status=400)
+        existing_email = CandidateAccount.objects.filter(email=email).exclude(id=account_id).first()
+        if existing_email:
+            return JsonResponse({"Error": "Email is already taken."}, status=409)
+        account.email = email
+
+    account.save()
+    return JsonResponse({"Success": "Account updated successfully."}, status=200)
 
 
 @extend_schema(
