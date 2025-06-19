@@ -154,12 +154,12 @@ def sign_up(request):
 
 @extend_schema(
     tags=['Candidate Profile'],
-    description='Upload candidate resume (supports TXT, PDF, DOC, DOCX formats)',
+    description='Upload candidate resume',
     request={
         'multipart/form-data': {
             'type': 'object',
             'properties': {
-                'resume': {'type': 'string', 'format': 'binary', 'description': 'Resume file (.txt, .pdf, .doc, .docx)'}
+                'resume': {'type': 'string', 'format': 'binary', 'description': 'Resume file (.txt, .pdf, .doc, .docx, .md)'}
             },
             'required': ['resume']
         }
@@ -175,7 +175,7 @@ def sign_up(request):
 def upload_resume(request):
     """
     Handle resume file uploads.
-    Supports TXT, PDF, DOC, and DOCX files.
+    Supports txt, pdf, doc, docx, md files.
     Stores original files locally with random IDs and extracts text for AI analysis.
     """
     if 'resume' not in request.FILES:
@@ -222,7 +222,7 @@ def upload_resume(request):
         os.makedirs(resumes_dir)
 
     # Generate random filename to prevent direct access and filename conflicts
-    random_id = uuid.uuid4().hex[:16]  # 16 character random ID
+    random_id = uuid.uuid4().hex
     filename = f"resumes/{random_id}{file_extension}"
     
     # Reset file pointer before saving

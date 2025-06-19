@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
 import { Navbar, Footer, AbstractLines } from '@/components';
 import { candidateAPI, generalAPI } from '@/services/api';
 import { Career } from '@/types/api';
@@ -35,6 +36,7 @@ interface CandidateProfile {
 
 export default function ProfilePage() {
   const params = useParams();
+  const router = useRouter();
   const candidateId = params.candidateId as string;
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
@@ -183,8 +185,31 @@ export default function ProfilePage() {
   const fetchProfile = async () => {
     try {
       const response = await candidateAPI.candidateInfo(candidateId);
-      setProfile(response.data);
-      setEditForm(response.data);
+      
+      // Map Candidate data to CandidateProfile interface
+      const candidateData = response.data;
+      const profileData: CandidateProfile = {
+        name: candidateData.name || `${candidateData.first_name || ''} ${candidateData.last_name || ''}`.trim(),
+        first_name: candidateData.first_name,
+        middle_name: candidateData.middle_name,
+        last_name: candidateData.last_name,
+        email: candidateData.email,
+        phone: candidateData.phone || '',
+        location: candidateData.location || '',
+        country: candidateData.country || '',
+        title: candidateData.title || '',
+        profile_pic: candidateData.profile_pic || '',
+        highlights: candidateData.ai_highlights || [],
+        preferred_career_types: candidateData.preferred_career_types,
+        experience_months: candidateData.experience_months,
+        has_original_resume: candidateData.has_original_resume || false,
+        resume: candidateData.resume,
+        highest_education: candidateData.highest_education,
+        skills: candidateData.skills
+      };
+      
+      setProfile(profileData);
+      setEditForm(candidateData);
       
       // Initialize name fields if they exist separately, otherwise split the full name
       if (response.data.first_name || response.data.last_name) {
@@ -347,10 +372,10 @@ export default function ProfilePage() {
             first_name: firstName,
             middle_name: middleName,
             last_name: lastName,
-            title: editForm.title,
-            email: editForm.email,
-            phone: editForm.phone?.replace(/\D/g, ''), // Store unformatted phone
-            location: formattedLocation,
+            title: editForm.title || '',
+            email: editForm.email || '',
+            phone: editForm.phone?.replace(/\D/g, '') || '',
+            location: formattedLocation || '',
             country: (editCountry && editCountry !== 'Select country') ? editCountry : prev.country
           } : null);
         } else {
@@ -463,29 +488,39 @@ export default function ProfilePage() {
     }
   };
 
-  const handleShowResume = async () => {
-    if (!profile) return;
-    
-    if (profile.has_original_resume) {
-      // Download original file
-      try {
-        const response = await candidateAPI.downloadResume();
-        const blob = new Blob([response.data]);
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'resume';
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      } catch (error) {
-        console.error('Failed to download resume:', error);
-        setError('Failed to download resume file');
+  const handleShowResume = () => {
+    setShowResumeModal(true);
+  };
+
+  const handleDownloadResume = async () => {
+    try {
+      const response = await candidateAPI.downloadResume();
+      
+      // Try to get filename from Content-Disposition header
+      let filename = 'resume';
+      const contentDisposition = response.headers['content-disposition'];
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
       }
-    } else {
-      // Show plain text/markdown in modal
-      setShowResumeModal(true);
+      
+      // Create blob with correct content type from response
+      const contentType = response.headers['content-type'] || 'application/octet-stream';
+      const blob = new Blob([response.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Failed to download resume:', error);
+      setError('Failed to download resume file');
     }
   };
 
@@ -768,64 +803,6 @@ export default function ProfilePage() {
     return requirements;
   };
 
-  const validateAccountForm = () => {
-    const errors: {[key: string]: string} = {};
-
-    // Username validation (if provided)
-    if (accountForm.username && accountForm.username.length < 3) {
-      errors.username = 'Username must be at least 3 characters';
-    }
-
-    // Email validation (if provided)
-    if (accountForm.email) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(accountForm.email)) {
-        errors.email = 'Please enter a valid email address';
-      }
-    }
-
-    // Password validation (if changing password)
-    if (accountForm.newPassword || accountForm.oldPassword || accountForm.confirmPassword) {
-      if (!accountForm.oldPassword) {
-        errors.oldPassword = 'Current password is required';
-      }
-      if (!accountForm.newPassword) {
-        errors.newPassword = 'New password is required';
-      } else {
-        const reqs = checkPasswordRequirements(accountForm.newPassword);
-        if (!Object.values(reqs).every(Boolean)) {
-          errors.newPassword = 'Password does not meet requirements';
-        }
-      }
-      if (accountForm.newPassword !== accountForm.confirmPassword) {
-        errors.confirmPassword = 'Passwords do not match';
-      }
-    }
-
-    setAccountErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const validateAccountInfo = (updateErrors = true) => {
-    const errors: {[key: string]: string} = {};
-    
-    // Only show error if field has content and is invalid
-    if (accountForm.username && accountForm.username.trim() !== '' && accountForm.username.length < 3) {
-      errors.username = 'Username must be at least 3 characters';
-    }
-    
-    if (accountForm.email && accountForm.email.trim() !== '') {
-      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-      if (!emailRegex.test(accountForm.email)) {
-        errors.email = 'Please enter a valid email address';
-      }
-    }
-    
-    if (updateErrors) {
-      setAccountErrors(prev => ({ ...prev, ...errors }));
-    }
-    return Object.keys(errors).length === 0;
-  };
 
   const handleAccountInfoUpdate = async () => {
     // For submission, check if required fields are provided
@@ -976,6 +953,7 @@ export default function ProfilePage() {
   const filteredCareers = allCareers.filter(career =>
     career.name.toLowerCase().includes(careerSearchTerm.toLowerCase())
   );
+
 
   return (
     <>
@@ -1526,35 +1504,39 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Resume */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 flex-1 flex flex-col">
-                  <h2 className="text-lg font-bold text-comfortable leading-none mb-2">Resume</h2>
+                <div className="bg-white rounded-2xl shadow-xl p-6 flex-1 flex flex-col opacity-0 animate-fade-in-right hover:shadow-2xl transition-shadow" style={{animationDelay: '500ms'}}>
+                  <h2 className="text-lg font-bold text-comfortable leading-none mb-4">Resume</h2>
                   
                   <div className="flex flex-col justify-between flex-1">
-                    <div className="flex flex-col items-center text-center justify-center flex-1">
+                    <div className="flex flex-col items-center text-center justify-center flex-1 space-y-3">
                       {profile.has_original_resume && (
-                        <div className="flex items-center gap-2 text-sm text-green-600 leading-none mb-2">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          Original file available
-                        </div>
+                        <button 
+                          onClick={handleDownloadResume}
+                          className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-xl text-sm font-medium transition-colors"
+                        >
+                          Download Original Resume
+                        </button>
                       )}
                       
                       {profile.resume ? (
                         <button
                           onClick={handleShowResume}
-                          className="bg-brand-light-blue hover:bg-brand-light-blue-dark text-black px-6 py-3 rounded-xl text-sm font-medium transition-colors leading-none"
+                          className="w-full bg-brand-light-blue hover:bg-brand-light-blue-dark text-black px-4 py-3 rounded-xl text-sm font-medium transition-colors"
                         >
-                          Show Resume
+                          Show Resume Text
                         </button>
                       ) : (
-                        <p className="text-gray-500 text-sm leading-none">No resume uploaded</p>
+                        <p className="text-gray-500 text-sm text-center py-8">No resume uploaded</p>
                       )}
                     </div>
                     
-                    <div className="flex justify-center">
-                      <button className="text-brand-navy hover:text-brand-light-blue text-sm font-medium leading-none">
+                    <div className="flex justify-center mt-4">
+                      <button 
+                        onClick={() => router.push('/upload-resume')}
+                        className="text-brand-navy hover:text-brand-navy text-sm font-medium transition-all duration-300 cursor-pointer hover:scale-105 hover:-translate-y-0.5 relative group"
+                      >
                         Upload New Resume
+                        <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-brand-navy transition-all duration-300 group-hover:w-full"></span>
                       </button>
                     </div>
                   </div>
@@ -2096,7 +2078,7 @@ export default function ProfilePage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-comfortable">Resume</h3>
+              <h3 className="text-lg font-bold text-comfortable">Resume Text</h3>
               <button
                 onClick={() => setShowResumeModal(false)}
                 className="hover:bg-gray-100 rounded-full p-2 transition-colors"
@@ -2107,9 +2089,15 @@ export default function ProfilePage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg">
-                {profile?.resume || 'No resume content available'}
-              </pre>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                {profile?.resume ? (
+                  <div className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-headings:font-bold prose-h1:text-lg prose-h1:border-b-2 prose-h1:border-gray-400 prose-h1:pb-1 prose-h1:mt-6 prose-h1:mb-3 prose-h2:text-base prose-h2:border-b prose-h2:border-gray-300 prose-h2:pb-1 prose-h2:mt-4 prose-h2:mb-2 prose-p:text-gray-700 prose-p:text-sm prose-p:leading-relaxed prose-p:mb-2 prose-ul:text-gray-700 prose-ul:text-sm prose-li:mb-1 prose-strong:font-semibold prose-a:text-blue-600 prose-a:hover:underline">
+                    <ReactMarkdown>{profile.resume}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm text-center py-8">No resume content available</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

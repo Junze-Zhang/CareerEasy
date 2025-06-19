@@ -26,6 +26,7 @@ export interface Candidate {
   title?: string;
   profile_pic?: string;
   resume?: string;
+  has_original_resume?: boolean;
   anonymous_resume?: string;
   standardized_resume?: string;
   standardized_anonymous_resume?: string;
