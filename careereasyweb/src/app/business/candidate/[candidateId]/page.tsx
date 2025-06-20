@@ -32,10 +32,11 @@ export default function BusinessCandidatePage() {
         
         console.log('employerAPI:', employerAPI);
         console.log('getCandidateInfo method:', employerAPI.getCandidateInfo);
-        console.log('getCandidateDetails method:', (employerAPI as any).getCandidateDetails);
+        const employerAPIExtended = employerAPI as typeof employerAPI & { getCandidateDetails?: (id: string) => Promise<{ data: Candidate }> };
+        console.log('getCandidateDetails method:', employerAPIExtended.getCandidateDetails);
         
         // Try both method names to see which one exists
-        const getCandidateMethod = employerAPI.getCandidateInfo || (employerAPI as any).getCandidateDetails;
+        const getCandidateMethod = employerAPI.getCandidateInfo || employerAPIExtended.getCandidateDetails;
         
         if (!getCandidateMethod) {
           throw new Error('Neither getCandidateInfo nor getCandidateDetails method found in employerAPI');
