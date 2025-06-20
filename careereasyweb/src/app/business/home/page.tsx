@@ -117,10 +117,15 @@ export default function BusinessHomePage() {
       } catch (rankErr) {
         throw rankErr; // Re-throw to be caught by outer catch
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Check if it's a 400 error from the query endpoint (invalid query)
-      if (err?.response?.status === 400) {
-        const errorMessage = err?.response?.data?.Error || 'Your search query could not be understood.';
+      if (err && typeof err === 'object' && 'response' in err && 
+          err.response && typeof err.response === 'object' && 'status' in err.response && 
+          err.response.status === 400) {
+        const errorData = err.response && typeof err.response === 'object' && 'data' in err.response ? err.response.data : null;
+        const errorMessage = errorData && typeof errorData === 'object' && 'Error' in errorData 
+          ? String(errorData.Error) 
+          : 'Your search query could not be understood.';
         setWarning(`⚠️ ${errorMessage} Showing all candidates instead.`);
         
         // Clear search params and show default ordering
