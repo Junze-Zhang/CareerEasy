@@ -58,7 +58,7 @@ export default function JobBoardPage() {
   };
 
   return (
-    <>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-sky-50 relative overflow-hidden">
       <Navbar />
       
       {/* Background */}
@@ -67,7 +67,7 @@ export default function JobBoardPage() {
       </div>
       
       <motion.section 
-        className="pt-24 pb-16 lg:pt-32 lg:pb-20 min-h-screen relative"
+        className="pt-24 pb-16 lg:pt-32 lg:pb-20 min-h-screen relative z-10"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6 }}
@@ -263,6 +263,6 @@ export default function JobBoardPage() {
       </motion.section>
       
       <Footer />
-    </>
+    </div>
   );
 }

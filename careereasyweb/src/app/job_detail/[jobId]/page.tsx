@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic';
 import { useParams, useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { Navbar, Footer, AbstractLines } from '@/components';
 import { candidateAPI } from '@/services/api';
 import { Job } from '@/types/api';
@@ -93,33 +97,48 @@ export default function JobDetailPage() {
       <AbstractLines />
       <Navbar />
       
-      <main className="pt-24 pb-16 relative z-10">
+      <motion.main 
+        className="pt-24 pb-16 relative z-10"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
+      >
         <div className="max-w-4xl mx-auto px-4">
-          {/* Back Button */}
-          <div className="mb-6">
-            <button
-              onClick={handleBack}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl font-medium transition-all duration-300 hover:scale-105 active:scale-95 flex items-center gap-2"
+          <motion.div 
+            className="space-y-6"
+            initial={{ y: 30, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
+            {/* Job Detail Card with Back Button */}
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              BACK
-            </button>
-          </div>
-
-          <div className="space-y-6">
-            {/* Job Detail Card */}
-            <JobDetailCard job={job} />
+              <JobDetailCard job={job} showBackButton={true} onBack={handleBack} />
+            </motion.div>
             
             {/* Job Fit Analysis Card */}
-            <JobFitCard jobId={job.id} />
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              <JobFitCard jobId={job.id} />
+            </motion.div>
             
             {/* Job Description Card */}
-            <JobDescriptionCard job={job} />
-          </div>
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+            >
+              <JobDescriptionCard job={job} />
+            </motion.div>
+          </motion.div>
         </div>
-      </main>
+      </motion.main>
       
       <Footer />
     </div>

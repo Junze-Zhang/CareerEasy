@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -1037,8 +1040,29 @@ export default function ProfilePage() {
       <main className="pt-24 pb-16 relative z-10">
         <div className="max-w-4xl mx-auto px-4">
           {/* Profile Header */}
-          <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 opacity-0 translate-y-4 animate-fade-in-up hover:shadow-2xl transition-shadow" style={{animationDelay: '100ms'}}>
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 opacity-0 translate-y-4 animate-fade-in-up hover:shadow-2xl transition-shadow relative" style={{animationDelay: '100ms'}}>
+            {/* Back Button - Top Left */}
+            <button
+              onClick={() => router.back()}
+              className="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-full transition-all group z-10"
+              aria-label="Go back"
+            >
+              <svg 
+                className="w-5 h-5 text-gray-600 group-hover:text-gray-800 transition-colors" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={2} 
+                  d="M10 19l-7-7m0 0l7-7m-7 7h18" 
+                />
+              </svg>
+            </button>
+
+            <div className="flex items-center justify-between mb-6 mt-8">
               <h1 className="text-2xl font-bold text-comfortable">{profile.name}</h1>
               <div className="flex items-center gap-2">
                 {editingSections.personal ? (

@@ -5,7 +5,7 @@ import AbstractLines from '@/components/background/AbstractLines';
 
 export default function Home() {
   return (
-    <>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-sky-50 relative overflow-hidden">
       <Navbar />
       
       {/* Background */}
@@ -13,10 +13,10 @@ export default function Home() {
         <AbstractLines />
       </div>
       
-      <main className="min-h-screen relative">
+      <main className="min-h-screen relative z-10">
         <Hero />
         <Footer />
       </main>
-    </>
+    </div>
   );
 } 

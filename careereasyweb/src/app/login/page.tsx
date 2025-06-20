@@ -119,7 +119,7 @@ function LoginForm() {
   };
 
   return (
-    <>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-sky-50 relative overflow-hidden">
       <Navbar hideGetStarted={true} hideLogIn={true} />
       
       {/* Background */}
@@ -128,7 +128,7 @@ function LoginForm() {
       </div>
       
       <motion.section 
-        className="pt-24 pb-16 lg:pt-32 lg:pb-20 min-h-screen relative"
+        className="pt-24 pb-16 lg:pt-32 lg:pb-20 min-h-screen relative z-10"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6 }}
@@ -346,7 +346,7 @@ function LoginForm() {
       </motion.section>
       
       <Footer />
-    </>
+    </div>
   );
 }
 

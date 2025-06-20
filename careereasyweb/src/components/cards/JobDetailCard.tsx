@@ -5,9 +5,11 @@ import { Job } from '@/types/api';
 
 interface JobDetailCardProps {
   job: Job;
+  showBackButton?: boolean;
+  onBack?: () => void;
 }
 
-export default function JobDetailCard({ job }: JobDetailCardProps) {
+export default function JobDetailCard({ job, showBackButton = false, onBack }: JobDetailCardProps) {
   const formatLocation = () => {
     const location = job.company__location || '';
     const country = job.company__country || '';
@@ -53,9 +55,32 @@ export default function JobDetailCard({ job }: JobDetailCardProps) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6">
+    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 relative">
+      {/* Back Button - Top Left */}
+      {showBackButton && onBack && (
+        <button
+          onClick={onBack}
+          className="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-full transition-all group z-10"
+          aria-label="Go back"
+        >
+          <svg 
+            className="w-5 h-5 text-gray-600 group-hover:text-gray-800 transition-colors" 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              strokeWidth={2} 
+              d="M10 19l-7-7m0 0l7-7m-7 7h18" 
+            />
+          </svg>
+        </button>
+      )}
+
       {/* Top Section: Logo + Title & Company */}
-      <div className="flex items-start gap-4">
+      <div className={`flex items-start gap-4 ${showBackButton ? 'mt-8' : ''}`}>
         {/* Company Logo */}
         <div className="flex-shrink-0">
           {job.company__logo ? (

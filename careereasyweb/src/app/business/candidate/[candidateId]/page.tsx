@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic';
 import { useParams, useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { BusinessNavbar, BusinessFooter, BusinessAbstractLines } from '@/components/business';
 import { employerAPI } from '@/services/api';
 import { Candidate } from '@/types/api';
@@ -96,20 +100,48 @@ export default function BusinessCandidatePage() {
       <BusinessAbstractLines />
       <BusinessNavbar />
       
-      <main className="pt-24 pb-16 relative z-10">
+      <motion.main 
+        className="pt-24 pb-16 relative z-10"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
+      >
         <div className="max-w-4xl mx-auto px-4">
-          <div className="space-y-6">
+          <motion.div 
+            className="space-y-6"
+            initial={{ y: 30, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
             {/* Personal Information Card */}
-            <BusinessPersonalInfoCard candidate={candidate} />
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+            >
+              <BusinessPersonalInfoCard candidate={candidate} />
+            </motion.div>
             
             {/* Highlights Card */}
-            <BusinessHighlightsCard candidate={candidate} />
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              <BusinessHighlightsCard candidate={candidate} />
+            </motion.div>
             
             {/* Resume Card */}
-            <BusinessResumeCard candidate={candidate} candidateId={candidateId} />
-          </div>
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+            >
+              <BusinessResumeCard candidate={candidate} candidateId={candidateId} />
+            </motion.div>
+          </motion.div>
         </div>
-      </main>
+      </motion.main>
       
       <BusinessFooter />
     </div>
