@@ -46,7 +46,7 @@ function LoginForm() {
         ?.split('=')[1];
       
       if (candidateId) {
-        router.replace(`/candidate_info/${candidateId}`);
+        router.replace(`/profile/${candidateId}`);
       } else {
         router.replace('/home');
       }

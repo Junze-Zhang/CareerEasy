@@ -12,7 +12,8 @@
       "Bash(find:*)",
       "Bash(npm run build:*)",
       "Bash(grep:*)",
-      "Bash(npx vercel:*)"
+      "Bash(npx vercel:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

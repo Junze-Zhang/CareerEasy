@@ -114,7 +114,7 @@ export default function JobFitCard({ jobId }: JobFitCardProps) {
                     .find(row => row.startsWith('candidate_id='))
                     ?.split('=')[1];
                   if (candidateId) {
-                    window.location.href = `/candidate_info/${candidateId}`;
+                    window.location.href = `/profile/${candidateId}`;
                   }
                 }}
                 className="bg-brand-navy hover:bg-brand-navy-dark text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 hover:scale-105 active:scale-95"
