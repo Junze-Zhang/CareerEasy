@@ -32,12 +32,16 @@ export default function BusinessCandidatePage() {
         
         console.log('employerAPI:', employerAPI);
         console.log('getCandidateInfo method:', employerAPI.getCandidateInfo);
+        console.log('getCandidateDetails method:', (employerAPI as any).getCandidateDetails);
         
-        if (!employerAPI.getCandidateInfo) {
-          throw new Error('getCandidateInfo method not found in employerAPI');
+        // Try both method names to see which one exists
+        const getCandidateMethod = employerAPI.getCandidateInfo || (employerAPI as any).getCandidateDetails;
+        
+        if (!getCandidateMethod) {
+          throw new Error('Neither getCandidateInfo nor getCandidateDetails method found in employerAPI');
         }
         
-        const response = await employerAPI.getCandidateInfo(candidateId);
+        const response = await getCandidateMethod(candidateId);
         setCandidate(response.data);
       } catch (err) {
         setError('Failed to fetch candidate details. Please try again later.');
