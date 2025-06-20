@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  productionBrowserSourceMaps: false,
   images: {
     remotePatterns: [
       {
@@ -51,7 +52,7 @@ const nextConfig: NextConfig = {
     
     return config;
   },
-  output: 'standalone',
+  // output: 'standalone', // Remove standalone to reduce bundle size
   poweredByHeader: false,
   compress: true,
 };
