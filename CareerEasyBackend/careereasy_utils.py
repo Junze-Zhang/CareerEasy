@@ -8,7 +8,7 @@ from datetime import datetime
 import json
 import os
 import re
-from typing import Union, Dict, Tuple
+from typing import Union, Dict, Tuple, List, Any
 import numpy as np
 from openai import OpenAI
 from django.db.models import QuerySet
@@ -26,6 +26,7 @@ from urllib.parse import urlparse
 import PyPDF2
 import docx
 from io import BytesIO
+import traceback
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -55,35 +56,66 @@ anonymizer_lock = threading.Lock()
 print("NLP engine loaded.")
 
 
+def _find_potential_json(response: str) -> List[str]:
+    # Regex pattern to match non-greedily
+    pattern = r"\{.*?\}"
+
+    # Find all matches
+    matches = re.findall(pattern, response)
+
+    return matches
+
+
 def validate_exp(response: str) -> bool:
-    try:
-        response = json.loads(response)
-        if "error" in response:
-            return True
-        return isinstance(response["experience_months"], int) \
-            and response["highest_education"].lower() in ["bachelor", "master", "phd", "high school",
-                                                          "below high school", "other"]
-    except:
-        return False
+    all_matches = [response] + _find_potential_json(response)
+    for match in all_matches:
+        try:
+            parsed = json.loads(match)
+            if "error" in parsed:
+                return True
+            if isinstance(parsed["experience_months"], int) \
+                    and parsed["highest_education"].lower() in ["bachelor",
+                                                                "master",
+                                                                "phd",
+                                                                "high school",
+                                                                "below high school",
+                                                                "other",
+                                                                "bachelor's",
+                                                                "master's",
+                                                                "doctorate",
+                                                                "doctor's"]:
+                return True
+        except:
+            continue
+    return False
 
 
 def validate_skills(response: str) -> bool:
-    try:
-        response = json.loads(response)
-        return isinstance(response["skills"], list)
-    except:
-        return False
+    all_matches = [response] + _find_potential_json(response)
+    for match in all_matches:
+        try:
+            parsed = json.loads(match)
+            if isinstance(parsed["skills"], list):
+                return True
+        except:
+            continue
+    return False
 
 
 def validate_ai_highlights(response: str) -> bool:
-    try:
-        response = json.loads(response)
-        return "Error" in response or (isinstance(response["highlights"], list) and len(response["highlights"]) == NUM_AI_HIGHLIGHTS)
-    except:
-        return False
+    all_matches = [response] + _find_potential_json(response)
+    for match in all_matches:
+        try:
+            parsed = json.loads(match)
+            if "Error" in parsed or \
+                    (isinstance(parsed["highlights"], list) and len(parsed["highlights"]) == NUM_AI_HIGHLIGHTS):
+                return True
+        except:
+            continue
+    return False
 
 
-def extract_from_resume(candidate: Candidate) -> dict:
+def extract_from_resume(candidate: Candidate) -> tuple[dict[str, Any], list[str]]:
     llm_client = OpenAI(api_key=os.getenv(
         "DEEPSEEK_API_KEY"), base_url=DEEPSEEK_API_URL)
     candidate_info = {
@@ -109,13 +141,24 @@ def extract_from_resume(candidate: Candidate) -> dict:
         debug_dir = os.path.join(settings.BASE_DIR, '.debug')
         if not os.path.exists(debug_dir):
             os.makedirs(debug_dir)
-        with open(os.path.join(debug_dir, f"{candidate.id}.txt"), "w") as f:
+        with open(os.path.join(debug_dir, f"{candidate.id}-{uuid.uuid4().hex}.txt"), "w") as f:
             f.write(f"Prompt: {prompt_exp}\n")
             # f.write(f"Reasoning: {response.reasoning_content}\n")
             f.write(f"Response: {response.content}\n\n")
-    response_json = json.loads(response.content)
-    candidate_info["exp_month"] = response_json["experience_months"]
-    candidate_info["highest_education"] = response_json["highest_education"]
+        print(response.content)
+
+    all_matches = [response.content] + _find_potential_json(response.content)
+    errors = []
+    for match in all_matches:
+        try:
+            parsed = json.loads(match)
+            if "Error" in parsed:
+                errors.append(parsed["error"])
+            candidate_info["exp_month"] = parsed["experience_months"]
+            candidate_info["highest_education"] = parsed["highest_education"]
+        except Exception as e:
+            errors.append(repr(e))
+
     messages.append({"role": "assistant", "content": response.content})
     messages.append({"role": "user", "content": PROMPT_CANDIDATE_SKILLS})
     response = llm_request(llm_client,
@@ -129,11 +172,22 @@ def extract_from_resume(candidate: Candidate) -> dict:
         debug_dir = os.path.join(settings.BASE_DIR, '.debug')
         if not os.path.exists(debug_dir):
             os.makedirs(debug_dir)
-        with open(os.path.join(debug_dir, f"{candidate.id}.txt"), "a") as f:
+        with open(os.path.join(debug_dir, f"{candidate.id}-{uuid.uuid4().hex}.txt"), "a") as f:
             f.write(f"Prompt: {PROMPT_CANDIDATE_SKILLS}\n")
             f.write(f"Reasoning: {response.reasoning_content}\n")
             f.write(f"Response: {response.content}\n\n")
-    candidate_info["skills"] = json.loads(response.content)["skills"]
+        print(response.content)
+
+    all_matches = [response.content] + _find_potential_json(response.content)
+    for match in all_matches:
+        try:
+            parsed = json.loads(match)
+            if "Error" in parsed:
+                errors.append(parsed["error"])
+            candidate_info["skills"] = parsed["skills"]
+        except Exception as e:
+            errors.append(repr(e))
+
     messages.append({"role": "assistant", "content": response.content})
     prompt_ai_highlights = PROMPT_CANDIDATE_AI_HIGHLIGHTS.format(
         num_highlights=NUM_AI_HIGHLIGHTS)
@@ -149,13 +203,24 @@ def extract_from_resume(candidate: Candidate) -> dict:
         debug_dir = os.path.join(settings.BASE_DIR, '.debug')
         if not os.path.exists(debug_dir):
             os.makedirs(debug_dir)
-        with open(os.path.join(debug_dir, f"{candidate.id}.txt"), "a") as f:
+        with open(os.path.join(debug_dir, f"{candidate.id}-{uuid.uuid4().hex}.txt"), "a") as f:
             f.write(f"Prompt: {prompt_ai_highlights}\n")
             f.write(f"Reasoning: {response.reasoning_content}\n")
             f.write(f"Response: {response.content}\n\n")
-    candidate_info["ai_highlights"] = json.loads(response.content)[
-        "highlights"]
-    return candidate_info
+        print(response.content)
+
+    all_matches = [response.content] + _find_potential_json(response.content)
+    for match in all_matches:
+        try:
+            parsed = json.loads(match)
+            if "Error" in parsed:
+                errors.append(parsed["error"])
+            candidate_info["ai_highlights"] = parsed["highlights"]
+        except Exception as e:
+            errors.append(repr(e))
+
+    return candidate_info, errors
+
 
 def update_ai_highlights(candidate: Candidate, custom_prompt: str) -> dict:
     llm_client = OpenAI(api_key=os.getenv(
@@ -178,6 +243,7 @@ def update_ai_highlights(candidate: Candidate, custom_prompt: str) -> dict:
     if "error" in response:
         raise ValueError(response["error"])
     return response["highlights"]
+
 
 def validate_query(response: str) -> bool:
     try:
@@ -325,14 +391,14 @@ def _match_score(query: dict, candidate: Dict, return_raw: bool = False) -> Unio
             # deduct 50 points if candidate has 2x more than max required (else linearly);
             # also deduct 10 points for each year exceeded (max 50)
             experience_score = max((50 * (2 - candidate_exp_months / max_months)), 0) + \
-                max(50 - 10 * (candidate_exp_months - max_months) / 12, 0)
+                               max(50 - 10 * (candidate_exp_months - max_months) / 12, 0)
     else:  # underqualified; scale experience score linearly up to 80
         experience_score = (min_months -
                             candidate_exp_months) / min_months * 80
     # 90% weight on experience match score
     # 10% weight on base score: 10 point for every year of experience, max 100
     experience_score = experience_score * 0.9 + \
-        min(candidate_exp_months / 12 * 10, 100) * 0.1
+                       min(candidate_exp_months / 12 * 10, 100) * 0.1
 
     # Title matching score: if any of preferred title matches the candidate, they get a score of 100
     query_preferred_title_keywords = query.get('preferred_title_keywords', [])
@@ -356,14 +422,14 @@ def _match_score(query: dict, candidate: Dict, return_raw: bool = False) -> Unio
             if keyword in candidate['standardized_anonymous_resume']:
                 resume_score[0] += 1
     skills_score[0] = skills_score[0] / \
-        len(query_high_priority_keywords) * \
-        100 if query_high_priority_keywords else 0
+                      len(query_high_priority_keywords) * \
+                      100 if query_high_priority_keywords else 0
     ai_highlights_score[0] = ai_highlights_score[0] / \
-        len(query_high_priority_keywords) * \
-        100 if query_high_priority_keywords else 0
+                             len(query_high_priority_keywords) * \
+                             100 if query_high_priority_keywords else 0
     resume_score[0] = resume_score[0] / \
-        len(query_high_priority_keywords) * \
-        100 if query_high_priority_keywords else 0
+                      len(query_high_priority_keywords) * \
+                      100 if query_high_priority_keywords else 0
 
     for keyword in query_low_priority_keywords:
         if candidate['standardized_skills']:
@@ -377,14 +443,14 @@ def _match_score(query: dict, candidate: Dict, return_raw: bool = False) -> Unio
             if keyword in candidate['standardized_anonymous_resume']:
                 resume_score[1] += 1
     skills_score[1] = skills_score[1] / \
-        len(query_low_priority_keywords) * \
-        100 if query_low_priority_keywords else 0
+                      len(query_low_priority_keywords) * \
+                      100 if query_low_priority_keywords else 0
     ai_highlights_score[1] = ai_highlights_score[1] / \
-        len(query_low_priority_keywords) * \
-        100 if query_low_priority_keywords else 0
+                             len(query_low_priority_keywords) * \
+                             100 if query_low_priority_keywords else 0
     resume_score[1] = resume_score[1] / \
-        len(query_low_priority_keywords) * \
-        100 if query_low_priority_keywords else 0
+                      len(query_low_priority_keywords) * \
+                      100 if query_low_priority_keywords else 0
 
     if return_raw:
         return {
@@ -411,11 +477,13 @@ def _match_score(query: dict, candidate: Dict, return_raw: bool = False) -> Unio
 
 
 def rank_candidates(query: dict, candidates: list[Dict]) -> list[Tuple[Dict, float]]:
-    candidates_with_score = [{**candidate, 
-                              "id": str(candidate['id']), 
-                              "name": candidate['first_name'] + " " + (candidate['middle_name'][0]+". " if candidate['middle_name'] else "") + candidate['last_name'],
-                              "match_score": _match_score(query, candidate)} 
-                              for candidate in candidates]
+    candidates_with_score = [{**candidate,
+                              "id": str(candidate['id']),
+                              "name": candidate['first_name'] + " " + (
+                                  candidate['middle_name'][0] + ". " if candidate['middle_name'] else "") + candidate[
+                                          'last_name'],
+                              "match_score": _match_score(query, candidate)}
+                             for candidate in candidates]
     return sorted(candidates_with_score, key=lambda x: x['match_score'], reverse=True)
 
 
@@ -441,6 +509,7 @@ def am_i_a_match(candidate: Candidate, job: JobPosting) -> bool:
     if "error" in response:
         raise ValueError(json.loads(response)["error"])
     return response
+
 
 def anonymize_resume(resume: str) -> str:
     try:
@@ -521,12 +590,13 @@ def anonymize_resume(resume: str) -> str:
                     )
                 }
             )
-        
+
         return anonymized_personal_info.text + resume_other
     except Exception as e:
         logger.error(f"Error in anonymize_resume: {str(e)}")
         # Return the original resume if anonymization fails
         return resume
+
 
 # Add cleanup function to be called when the application shuts down
 def cleanup():
@@ -550,24 +620,24 @@ def extract_text_from_pdf(file) -> str:
     try:
         # Create a BytesIO object from the file
         file_content = BytesIO(file.read())
-        
+
         # Create a PDF reader object
         pdf_reader = PyPDF2.PdfReader(file_content)
-        
+
         # Extract text from all pages
         text = ""
         for page in pdf_reader.pages:
             text += page.extract_text() + "\n"
-        
+
         # Reset file pointer for potential future use
         file.seek(0)
-        
+
         if not text.strip():
             raise ValueError("No text content found in PDF")
-            
+
         logger.info("Successfully extracted text from PDF")
         return text.strip()
-        
+
     except Exception as e:
         logger.error(f"Error extracting text from PDF: {str(e)}")
         raise ValueError(f"Failed to extract text from PDF: {str(e)}")
@@ -589,31 +659,31 @@ def extract_text_from_docx(file) -> str:
     try:
         # Create a BytesIO object from the file
         file_content = BytesIO(file.read())
-        
+
         # Create a document object
         doc = docx.Document(file_content)
-        
+
         # Extract text from all paragraphs
         text = ""
         for paragraph in doc.paragraphs:
             text += paragraph.text + "\n"
-        
+
         # Extract text from tables
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     text += cell.text + " "
                 text += "\n"
-        
+
         # Reset file pointer for potential future use
         file.seek(0)
-        
+
         if not text.strip():
             raise ValueError("No text content found in DOCX")
-            
+
         logger.info("Successfully extracted text from DOCX")
         return text.strip()
-        
+
     except Exception as e:
         logger.error(f"Error extracting text from DOCX: {str(e)}")
         raise ValueError(f"Failed to extract text from DOCX: {str(e)}")
@@ -635,31 +705,31 @@ def extract_text_from_doc(file) -> str:
     """
     try:
         import docx2txt
-        
+
         # Create a temporary file to work with docx2txt
         import tempfile
-        
+
         with tempfile.NamedTemporaryFile(suffix='.doc', delete=False) as temp_file:
             # Write file content to temporary file
             for chunk in file.chunks():
                 temp_file.write(chunk)
             temp_file.flush()
-            
+
             # Extract text using docx2txt
             text = docx2txt.process(temp_file.name)
-            
+
         # Clean up temporary file
         os.unlink(temp_file.name)
-        
+
         # Reset file pointer for potential future use
         file.seek(0)
-        
+
         if not text.strip():
             raise ValueError("No text content found in DOC")
-            
+
         logger.info("Successfully extracted text from DOC")
         return text.strip()
-        
+
     except ImportError:
         logger.error("docx2txt library not available for DOC files")
         raise ValueError("DOC file format not supported. Please convert to DOCX or PDF.")
@@ -683,9 +753,9 @@ def extract_text_from_file(file) -> str:
     """
     if not hasattr(file, 'name') or not file.name:
         raise ValueError("File must have a name/extension")
-    
+
     file_extension = os.path.splitext(file.name)[1].lower()
-    
+
     try:
         if file_extension == '.txt':
             # Handle plain text files
@@ -721,7 +791,7 @@ def upload_profile_picture_to_s3(file, candidate_id: str) -> str:
     # Validate file type
     allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
     file_extension = None
-    
+
     if hasattr(file, 'name') and file.name:
         file_extension = os.path.splitext(file.name)[1].lower()
         if file_extension not in allowed_extensions:
@@ -729,12 +799,12 @@ def upload_profile_picture_to_s3(file, candidate_id: str) -> str:
     else:
         # Default to .jpg if no extension is provided
         file_extension = '.jpg'
-    
+
     # Validate file size (max 10MB)
     max_size = 10 * 1024 * 1024  # 10MB
     if hasattr(file, 'size') and file.size > max_size:
         raise ValueError("File size too large. Maximum size is 10MB.")
-    
+
     try:
         # Initialize S3 client
         s3_client = boto3.client(
@@ -743,15 +813,15 @@ def upload_profile_picture_to_s3(file, candidate_id: str) -> str:
             aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
             region_name=os.getenv('AWS_REGION', 'ca-central-1')
         )
-        
+
         # Generate unique filename
         unique_filename = f"profile-pictures/{candidate_id}_{uuid.uuid4().hex[:8]}{file_extension}"
-        
+
         # Get bucket name from S3_BASE_URL
         from CareerEasyBackend.initDB import S3_BASE_URL
         parsed_url = urlparse(S3_BASE_URL.format(n="dummy"))
         bucket_name = parsed_url.netloc.split('.')[0]  # Extract bucket name from hostname
-        
+
         # Upload file to S3
         s3_client.upload_fileobj(
             file,
@@ -762,21 +832,22 @@ def upload_profile_picture_to_s3(file, candidate_id: str) -> str:
                 'ACL': 'public-read'  # Make the file publicly readable
             }
         )
-        
+
         # Return the full S3 URL
         s3_url = f"https://{bucket_name}.s3.ca-central-1.amazonaws.com/{unique_filename}"
         logger.info(f"Successfully uploaded profile picture to S3: {s3_url}")
         return s3_url
-        
+
     except NoCredentialsError:
         logger.error("AWS credentials not found")
         raise ValueError("Server configuration error: AWS credentials not found")
     except ClientError as e:
         error_code = e.response['Error']['Code']
         logger.error(f"AWS S3 error: {str(e)}")
-        
+
         if error_code == 'AccessDenied':
-            raise ValueError("Profile picture upload is temporarily unavailable. Please try again later or contact support.")
+            raise ValueError(
+                "Profile picture upload is temporarily unavailable. Please try again later or contact support.")
         else:
             raise ValueError(f"Failed to upload file to S3: {str(e)}")
     except Exception as e:

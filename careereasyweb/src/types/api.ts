@@ -30,7 +30,7 @@ export interface Candidate {
   anonymous_resume?: string;
   standardized_resume?: string;
   standardized_anonymous_resume?: string;
-  ai_highlights?: string[];
+  highlights?: string[];
   standardized_ai_highlights?: string[];
   skills?: string[];
   standardized_skills?: string[];

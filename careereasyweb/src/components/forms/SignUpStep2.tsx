@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useSignUp } from '@/contexts/SignUpContext';
+import { isAuthenticated } from '@/utils/auth';
 import ProgressIndicator from './ProgressIndicator';
 import StateProvinceSelect from './StateProvinceSelect';
 import CitySelect from './CitySelect';
@@ -13,8 +14,21 @@ export default function SignUpStep2() {
   const router = useRouter();
   const { formData, errors, updateFormData, updateErrors, isStepValid, canAccessStep } = useSignUp();
 
-  // Check if user can access this step, redirect if not
+  // Check if user is already authenticated and redirect to profile
   useEffect(() => {
+    if (isAuthenticated()) {
+      const candidateId = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('candidate_id='))
+        ?.split('=')[1];
+      
+      if (candidateId) {
+        router.replace(`/${candidateId}`);
+        return;
+      }
+    }
+
+    // Check if user can access this step, redirect if not
     if (!canAccessStep(2)) {
       router.replace('/signup/step-1');
     }

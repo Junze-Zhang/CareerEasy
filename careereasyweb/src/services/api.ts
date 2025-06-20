@@ -85,7 +85,7 @@ export const candidateAPI = {
   getPostedJobs: (page: number = 1, pageSize: number = 20): Promise<AxiosResponse<JobsResponse>> =>
     api.get(`/candidate/jobs?page=${page}&page_size=${pageSize}`),
   
-  getJobDetails: (jobId: number): Promise<AxiosResponse<Job>> =>
+  getJobDetails: (jobId: string): Promise<AxiosResponse<Job>> =>
     api.get(`/candidate/job_detail/${jobId}`),
   
   getCompanyDetails: (companyId: number): Promise<AxiosResponse<Company>> =>

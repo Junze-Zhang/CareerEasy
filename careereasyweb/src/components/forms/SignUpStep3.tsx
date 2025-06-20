@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EyeIcon, EyeSlashIcon, CheckCircleIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { useSignUp } from '@/contexts/SignUpContext';
+import { isAuthenticated } from '@/utils/auth';
+import config from '@/config';
 import ProgressIndicator from './ProgressIndicator';
 
 export default function SignUpStep3() {
@@ -21,8 +23,21 @@ export default function SignUpStep3() {
     submitForm
   } = useSignUp();
 
-  // Check if user can access this step, redirect if not
+  // Check if user is already authenticated and redirect to profile
   useEffect(() => {
+    if (isAuthenticated()) {
+      const candidateId = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('candidate_id='))
+        ?.split('=')[1];
+      
+      if (candidateId) {
+        router.replace(`/${candidateId}`);
+        return;
+      }
+    }
+
+    // Check if user can access this step, redirect if not
     if (!canAccessStep(3)) {
       router.replace('/signup/step-2');
     }
@@ -70,10 +85,20 @@ export default function SignUpStep3() {
   const validatePassword = (password: string): string | undefined => {
     if (!password) return undefined;
     const requirements = checkPasswordRequirements(password);
-    const metRequirements = Object.values(requirements).filter(Boolean).length;
     
+    // Length is mandatory
     if (!requirements.length) return 'Password must be at least 6 characters';
-    if (metRequirements < 2) return 'Password must meet at least 2 requirements';
+    
+    // Count additional requirements (excluding length)
+    const additionalRequirements = [
+      requirements.uppercase,
+      requirements.lowercase, 
+      requirements.number,
+      requirements.symbol
+    ];
+    const metAdditionalRequirements = additionalRequirements.filter(Boolean).length;
+    
+    if (metAdditionalRequirements < 2) return 'Password must meet at least 2 requirements';
     return undefined;
   };
 
@@ -264,8 +289,35 @@ export default function SignUpStep3() {
       const result = await submitForm();
       
       if (result.success) {
-        // Success - redirect to success page
-        router.push('/signup/success');
+        // Automatically log in the user after successful signup
+        try {
+          const loginResponse = await fetch(`${config.API_BASE_URL}/candidate/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              username: formData.username,
+              password: formData.password,
+            }),
+          });
+
+          const loginResult = await loginResponse.json();
+
+          if (loginResponse.ok && loginResult.Success) {
+            // Login successful, redirect to upload resume page
+            router.push('/upload-resume');
+          } else {
+            // Login failed, redirect to login page with message
+            console.error('Auto-login failed:', loginResult.Error);
+            router.push('/login?message=signup_success');
+          }
+        } catch (loginError) {
+          console.error('Auto-login error:', loginError);
+          // If auto-login fails, redirect to login page
+          router.push('/login?message=signup_success');
+        }
       } else {
         // Handle API error
         console.error('Sign-up failed:', result.error);
@@ -477,28 +529,28 @@ export default function SignUpStep3() {
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.3 }}
                     >
-                      <motion.div 
-                        className="flex items-center space-x-2"
-                        initial={{ x: -10, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 0.1 }}
-                      >
-                        <motion.div 
-                          className={`w-3 h-3 rounded-full transition-colors duration-300`}
-                          animate={{ 
-                            backgroundColor: passwordRequirements.length ? '#10b981' : '#d1d5db',
-                            scale: passwordRequirements.length ? [1, 1.2, 1] : 1
-                          }}
-                          transition={{ duration: 0.3 }}
-                        >
-                          {passwordRequirements.length && (
-                            <CheckCircleIcon className="w-3 h-3 text-white" />
-                          )}
-                        </motion.div>
-                        <span className={`text-xs transition-colors duration-300 ${passwordRequirements.length ? 'text-green-600' : 'text-gray-500'}`}>
-                          At least 6 characters
-                        </span>
-                      </motion.div>
+                      {/*<motion.div */}
+                      {/*  className="flex items-center space-x-2"*/}
+                      {/*  initial={{ x: -10, opacity: 0 }}*/}
+                      {/*  animate={{ x: 0, opacity: 1 }}*/}
+                      {/*  transition={{ delay: 0.1 }}*/}
+                      {/*>*/}
+                      {/*  <motion.div */}
+                      {/*    className={`w-3 h-3 rounded-full transition-colors duration-300`}*/}
+                      {/*    animate={{ */}
+                      {/*      backgroundColor: passwordRequirements.length ? '#10b981' : '#d1d5db',*/}
+                      {/*      scale: passwordRequirements.length ? [1, 1.2, 1] : 1*/}
+                      {/*    }}*/}
+                      {/*    transition={{ duration: 0.3 }}*/}
+                      {/*  >*/}
+                      {/*    {passwordRequirements.length && (*/}
+                      {/*      <CheckCircleIcon className="w-3 h-3 text-white" />*/}
+                      {/*    )}*/}
+                      {/*  </motion.div>*/}
+                      {/*  <span className={`text-xs transition-colors duration-300 ${passwordRequirements.length ? 'text-green-600' : 'text-gray-500'}`}>*/}
+                      {/*    At least 6 characters*/}
+                      {/*  </span>*/}
+                      {/*</motion.div>*/}
                       <motion.div 
                         className="flex items-center space-x-2"
                         initial={{ x: -10, opacity: 0 }}
@@ -593,7 +645,7 @@ export default function SignUpStep3() {
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.35 }}
                       >
-                        Password must meet at least 2 of the above requirements
+                        Password must be at least 6 characters and meet 2 additional requirements
                       </motion.p>
                     </motion.div>
                   )}

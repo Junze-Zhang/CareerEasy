@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
@@ -10,6 +10,7 @@ import config from '@/config';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -17,6 +18,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [loginMethod, setLoginMethod] = useState<'username' | 'email'>('username');
 
   // Function to check if authentication cookies exist
@@ -34,12 +36,28 @@ export default function LoginPage() {
     return candidateId && candidateAccountId;
   };
 
-  // Check authentication on component mount
+  // Check authentication on component mount and handle success message
   useEffect(() => {
     if (isAuthenticated()) {
-      router.replace('/home');
+      // Get candidate ID and redirect to profile instead of home
+      const candidateId = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('candidate_id='))
+        ?.split('=')[1];
+      
+      if (candidateId) {
+        router.replace(`/${candidateId}`);
+      } else {
+        router.replace('/home');
+      }
     }
-  }, [router]);
+
+    // Check for success message from signup
+    const message = searchParams.get('message');
+    if (message === 'signup_success') {
+      setSuccessMessage('Account created successfully! Please log in to continue.');
+    }
+  }, [router, searchParams]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -74,7 +92,7 @@ export default function LoginPage() {
         },
         credentials: 'include', // Include cookies for authentication
         body: JSON.stringify({
-          [loginMethod]: formData.username, // Send either 'username' or 'email' field
+          username: formData.username, // Send either 'username' or 'email' field as username
           password: formData.password,
         }),
       });
@@ -242,6 +260,17 @@ export default function LoginPage() {
                   className="text-red-600 text-sm text-center"
                 >
                   {error}
+                </motion.div>
+              )}
+
+              {/* Success Message */}
+              {successMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-green-600 text-sm text-center"
+                >
+                  {successMessage}
                 </motion.div>
               )}
 

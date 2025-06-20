@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -37,6 +37,7 @@ interface CandidateProfile {
 export default function ProfilePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const candidateId = params.candidateId as string;
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
@@ -140,6 +141,18 @@ export default function ProfilePage() {
     }
   }, [candidateId, isOwnProfile]);
 
+  // Listen for refresh parameter to refetch data (e.g., after AI analysis completes)
+  useEffect(() => {
+    const refreshParam = searchParams.get('refresh');
+    if (refreshParam) {
+      fetchProfile();
+      // Clean up the URL parameter after refreshing
+      const url = new URL(window.location.href);
+      url.searchParams.delete('refresh');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [searchParams]);
+
   // Update validation when entering edit mode
   useEffect(() => {
     if (editingSections.personal) {
@@ -199,7 +212,7 @@ export default function ProfilePage() {
         country: candidateData.country || '',
         title: candidateData.title || '',
         profile_pic: candidateData.profile_pic || '',
-        highlights: candidateData.ai_highlights || [],
+        highlights: candidateData.highlights || [],
         preferred_career_types: candidateData.preferred_career_types,
         experience_months: candidateData.experience_months,
         has_original_resume: candidateData.has_original_resume || false,
@@ -210,6 +223,12 @@ export default function ProfilePage() {
       
       setProfile(profileData);
       setEditForm(candidateData);
+      
+      // Check if this is own profile and has no resume - redirect to upload-resume
+      if (isOwnProfile && (!candidateData.resume || candidateData.resume.trim() === '')) {
+        router.push('/upload-resume');
+        return;
+      }
       
       // Initialize name fields if they exist separately, otherwise split the full name
       if (response.data.first_name || response.data.last_name) {
@@ -1427,9 +1446,9 @@ export default function ProfilePage() {
                     </div>
                   </div>
                   
-                  <div className="flex flex-col justify-between flex-1">
+                  <div className="flex flex-col justify-between flex-1 space-y-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 leading-none mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Experience
                       </label>
                       {editingSections.experience ? (
@@ -1459,14 +1478,14 @@ export default function ProfilePage() {
                           </div>
                         </div>
                       ) : (
-                        <p className="text-gray-600 text-sm leading-none">
+                        <p className="text-gray-600 text-sm">
                           {formatExperience(profile.experience_months)}
                         </p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 leading-none mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Highest Degree
                       </label>
                       {editingSections.experience ? (
@@ -1495,7 +1514,7 @@ export default function ProfilePage() {
                           )}
                         </div>
                       ) : (
-                        <p className="text-gray-600 text-sm leading-none">
+                        <p className="text-gray-600 text-sm">
                           {profile.highest_education || 'Not specified'}
                         </p>
                       )}

@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import { Navbar, Footer, AbstractLines } from '@/components';
 import { candidateAPI } from '@/services/api';
+import { useNotification } from '@/context/NotificationContext';
 
 export default function UploadResumePage() {
   const router = useRouter();
+  const { addNotification } = useNotification();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -24,12 +26,18 @@ export default function UploadResumePage() {
         .find(row => row.startsWith('candidate_id='))
         ?.split('=')[1];
       
-      if (candidateId) {
+      const candidateAccountId = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('candidate_account_id='))
+        ?.split('=')[1];
+      
+      if (candidateId && candidateAccountId) {
         setIsLoggedIn(true);
         // Fetch existing resume if available
         fetchExistingResume();
       } else {
-        router.push('/login');
+        // Redirect to hero page instead of login
+        router.push('/');
       }
     }
   }, [router]);
@@ -86,7 +94,7 @@ export default function UploadResumePage() {
       'text/plain'
     ];
     
-    const allowedExtensions = ['.pdf', '.doc', '.docx', '.txt', 'md'];
+    const allowedExtensions = ['.pdf', '.doc', '.docx', '.txt', '.md'];
     const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
     
     if (allowedTypes.includes(file.type) || allowedExtensions.includes(fileExtension)) {
@@ -131,11 +139,47 @@ export default function UploadResumePage() {
         fileInput.value = '';
       }
 
+      // Trigger AI analysis immediately after successful upload
+      addNotification({
+        message: 'Resume uploaded successfully! Starting AI analysis in background (this can take up to 20 minutes)...',
+        timeout: 5000
+      });
+
+      // Start AI analysis in background
+      candidateAPI.extractCandidateInfo().then(() => {
+        addNotification({
+          message: 'AI resume analysis complete.',
+          action: () => {
+            const candidateId = document.cookie
+              .split('; ')
+              .find(row => row.startsWith('candidate_id='))
+              ?.split('=')[1];
+            if (candidateId) {
+              router.push(`/${candidateId}?refresh=${Date.now()}`);
+            }
+          },
+          actionText: 'Go to my profile',
+          timeout: 15000
+        });
+      }).catch((error) => {
+        console.error('AI analysis failed:', error);
+        addNotification({
+          message: 'AI resume analysis failed. You can retry from your profile.',
+          timeout: 8000
+        });
+      });
+
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
         const axiosError = err as { response?: { data?: { Error?: string } } };
         if (axiosError.response?.data?.Error) {
-          setError(axiosError.response.data.Error);
+          const errorMessage = axiosError.response.data.Error;
+          // Handle rate limiting error specifically
+          if (errorMessage.includes('upload limit') || errorMessage.includes('rate limit')) {
+            setError('Upload limit reached. You can upload up to 5 resumes per 10 minutes. Please wait and try again.');
+          } else {
+            setError(errorMessage);
+          }
         } else {
           setError('Failed to upload resume. Please try again.');
         }
@@ -145,6 +189,10 @@ export default function UploadResumePage() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const handleNext = () => {
+    router.push('/home');
   };
 
 
@@ -202,7 +250,7 @@ export default function UploadResumePage() {
                     id="resume-upload"
                     type="file"
                     className="hidden"
-                    accept=".pdf,.doc,.docx,.txt"
+                    accept=".pdf,.doc,.docx,.txt,.md"
                     onChange={handleFileSelect}
                   />
                 </label>
@@ -217,9 +265,6 @@ export default function UploadResumePage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium text-gray-900">{selectedFile.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                      </p>
                     </div>
                     <button
                       onClick={() => setSelectedFile(null)}
@@ -254,10 +299,31 @@ export default function UploadResumePage() {
               )}
 
               {uploadSuccess && (
-                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-xl">
-                  <p className="text-green-600 text-sm">Resume uploaded successfully!</p>
+                <div className="mt-4 space-y-4">
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-xl">
+                    <p className="text-green-600 text-sm">Resume uploaded successfully!</p>
+                  </div>
+                  <button
+                    onClick={handleNext}
+                    className="w-full bg-brand-navy hover:bg-brand-navy-dark text-white py-3 px-6 rounded-xl font-medium transition-all duration-300 hover:scale-105 active:scale-95"
+                  >
+                    Next: Continue to Job Board
+                  </button>
                 </div>
               )}
+              
+              {/* Back Button */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => router.back()}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 px-6 rounded-xl font-medium transition-all duration-300 hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Back
+                </button>
+              </div>
             </div>
 
             {/* Resume Preview Section */}

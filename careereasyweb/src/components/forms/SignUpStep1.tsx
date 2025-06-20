@@ -1,14 +1,30 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useSignUp } from '@/contexts/SignUpContext';
+import { isAuthenticated } from '@/utils/auth';
 import ProgressIndicator from './ProgressIndicator';
 import JobTitleSelect from './JobTitleSelect';
 
 export default function SignUpStep1() {
   const router = useRouter();
   const { formData, errors, updateFormData, updateErrors, isStepValid } = useSignUp();
+
+  // Check if user is already authenticated and redirect to profile
+  useEffect(() => {
+    if (isAuthenticated()) {
+      const candidateId = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('candidate_id='))
+        ?.split('=')[1];
+      
+      if (candidateId) {
+        router.replace(`/${candidateId}`);
+      }
+    }
+  }, [router]);
 
   const validateName = (name: string): string | undefined => {
     if (!name) return undefined;

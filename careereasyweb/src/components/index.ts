@@ -7,6 +7,9 @@ export { default as JobsList } from './sections/JobsList';
 
 // Card Components
 export { default as JobCard } from './cards/JobCard';
+export { default as JobDetailCard } from './cards/JobDetailCard';
+export { default as JobFitCard } from './cards/JobFitCard';
+export { default as JobDescriptionCard } from './cards/JobDescriptionCard';
 
 // Layout Components
 export { default as Footer } from './layout/Footer';
