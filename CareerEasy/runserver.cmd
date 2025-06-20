@@ -1,0 +1,1 @@
+python manage.py runserver_plus --cert-file certs/fullchain.pem --key-file certs/privkey.pem 0.0.0.0:8000

@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd careereasyweb && npm run build",
+  "outputDirectory": "careereasyweb/.next",
+  "installCommand": "cd careereasyweb && npm install",
+  "devCommand": "cd careereasyweb && npm run dev"
+}
