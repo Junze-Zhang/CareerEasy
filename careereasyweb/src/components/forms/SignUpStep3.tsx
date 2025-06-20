@@ -32,7 +32,7 @@ export default function SignUpStep3() {
         ?.split('=')[1];
       
       if (candidateId) {
-        router.replace(`/${candidateId}`);
+        router.replace(`/candidate_info/${candidateId}`);
         return;
       }
     }

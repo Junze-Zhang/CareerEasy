@@ -7,8 +7,10 @@ export const dynamic = 'force-dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { BusinessNavbar, BusinessFooter, BusinessAbstractLines } from '@/components/business';
-import { employerAPI } from '@/services/api';
+import * as api from '@/services/api';
 import { Candidate } from '@/types/api';
+
+const { employerAPI } = api;
 import BusinessPersonalInfoCard from '@/components/business/cards/BusinessPersonalInfoCard';
 import BusinessHighlightsCard from '@/components/business/cards/BusinessHighlightsCard';
 import BusinessResumeCard from '@/components/business/cards/BusinessResumeCard';
@@ -27,6 +29,13 @@ export default function BusinessCandidatePage() {
       try {
         setLoading(true);
         setError(null);
+        
+        console.log('employerAPI:', employerAPI);
+        console.log('getCandidateInfo method:', employerAPI.getCandidateInfo);
+        
+        if (!employerAPI.getCandidateInfo) {
+          throw new Error('getCandidateInfo method not found in employerAPI');
+        }
         
         const response = await employerAPI.getCandidateInfo(candidateId);
         setCandidate(response.data);

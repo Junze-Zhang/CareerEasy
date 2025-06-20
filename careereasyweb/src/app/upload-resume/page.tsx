@@ -155,7 +155,7 @@ export default function UploadResumePage() {
               .find(row => row.startsWith('candidate_id='))
               ?.split('=')[1];
             if (candidateId) {
-              router.push(`/${candidateId}?refresh=${Date.now()}`);
+              router.push(`/candidate_info/${candidateId}?refresh=${Date.now()}`);
             }
           },
           actionText: 'Go to my profile',

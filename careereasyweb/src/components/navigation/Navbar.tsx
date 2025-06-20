@@ -107,7 +107,7 @@ export default function Navbar({ hideGetStarted = false, hideLogIn = false, getS
 
   const handleProfile = () => {
     if (candidateId) {
-      router.push(`/${candidateId}`);
+      router.push(`/candidate_info/${candidateId}`);
     }
   };
 

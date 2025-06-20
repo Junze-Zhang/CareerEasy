@@ -21,7 +21,7 @@ export default function SignUpStep1() {
         ?.split('=')[1];
       
       if (candidateId) {
-        router.replace(`/${candidateId}`);
+        router.replace(`/candidate_info/${candidateId}`);
       }
     }
   }, [router]);
