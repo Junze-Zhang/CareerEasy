@@ -23,7 +23,7 @@ import {
   ResumeUploadResponse,
   ExtractCandidateInfoResponse,
   UpdateHighlightsData,
-  UpdateHighlightsResponse,
+  UpdateHighlightsResponse, QueryResponse,
 } from '@/types/api';
 
 const api = axios.create({
@@ -88,7 +88,7 @@ export const candidateAPI = {
   getJobDetails: (jobId: string): Promise<AxiosResponse<Job>> =>
     api.get(`/candidate/job_detail/${jobId}`),
   
-  getCompanyDetails: (companyId: number): Promise<AxiosResponse<Company>> =>
+  getCompanyDetails: (companyId: string): Promise<AxiosResponse<Company>> =>
     api.get(`/candidate/company_detail/${companyId}`),
   
   checkFit: (data: CheckFitData): Promise<AxiosResponse<CheckFitResponse>> =>
@@ -119,7 +119,7 @@ export const employerAPI = {
   getCandidates: (page: number = 1, pageSize: number = 20): Promise<AxiosResponse<CandidatesResponse>> =>
     api.get(`/employer/candidates?page=${page}&page_size=${pageSize}`),
   
-  naturalLanguageQuery: (query: string): Promise<AxiosResponse<CandidatesResponse>> =>
+  naturalLanguageQuery: (query: string): Promise<AxiosResponse<QueryResponse>> =>
     api.post('/employer/query', { query }),
   
   getRankedCandidates: (
@@ -129,13 +129,13 @@ export const employerAPI = {
   ): Promise<AxiosResponse<CandidatesResponse>> =>
     api.post(`/employer/rank?page=${page}&page_size=${pageSize}`, query),
   
-  getCandidateDetails: (candidateId: number): Promise<AxiosResponse<Candidate>> =>
+  getCandidateDetails: (candidateId: string): Promise<AxiosResponse<Candidate>> =>
     api.get(`/employer/candidate/${candidateId}`),
   
   getPostedJobs: (): Promise<AxiosResponse<Job[]>> =>
     api.get('/employer/jobs'),
   
-  getCompany: (companyId: number): Promise<AxiosResponse<Company>> =>
+  getCompany: (companyId: string): Promise<AxiosResponse<Company>> =>
     api.get(`/employer/company/${companyId}`),
   
   createCompany: (data: CompanyCreateData): Promise<AxiosResponse<Company>> =>
@@ -146,6 +146,14 @@ export const employerAPI = {
   
   getEmployerInfo: (): Promise<AxiosResponse<Employer>> =>
     api.get('/employer/me'),
+
+  getCandidateInfo: (candidateId: string): Promise<AxiosResponse<Candidate>> =>
+    api.get(`/employer/candidate/${candidateId}`),
+
+  downloadCandidateResume: (candidateId: string): Promise<AxiosResponse<Blob>> =>
+    api.get(`/employer/download_resume/${candidateId}`, {
+      responseType: 'blob',
+    }),
 };
 
 export const generalAPI = {

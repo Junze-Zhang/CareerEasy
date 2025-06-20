@@ -71,7 +71,7 @@ export default function Navbar({ hideGetStarted = false, hideLogIn = false, getS
   const fetchProfilePicture = async (candidateId: string) => {
     try {
       const response = await candidateAPI.candidateInfo(candidateId);
-      setProfilePic(response.data.profile_pic);
+      setProfilePic(response.data.profile_pic || null);
       setProfilePicFetched(true);
     } catch (error) {
       console.error('Failed to fetch profile picture:', error);

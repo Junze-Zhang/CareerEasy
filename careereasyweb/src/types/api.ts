@@ -32,6 +32,7 @@ export interface Candidate {
   standardized_anonymous_resume?: string;
   highlights?: string[];
   standardized_ai_highlights?: string[];
+  ai_highlights?: string[];
   skills?: string[];
   standardized_skills?: string[];
   experience_months?: number;
@@ -159,7 +160,7 @@ export interface EmployerSignupData {
   name: string;
   email: string;
   password: string;
-  company_id?: number;
+  company_id?: string;
 }
 
 export interface JobPostData {
@@ -203,6 +204,7 @@ export interface CandidatesResponse {
   has_previous: boolean;
   total_pages: number;
   current_page: number;
+  total_count: number;
 }
 
 // Career types

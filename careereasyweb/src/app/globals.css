@@ -53,6 +53,8 @@
   /* Custom Brand Colors */
   --color-brand-light-blue: #9ABAFF;
   --color-brand-navy: #5D67F0;
+  --color-brand-brown: #A0520D;
+  --color-brand-light-brown: #D2691E;
   --color-comfortable-text: #2D3748;
   --color-light-bg: #FAFAFA;
 }
@@ -105,6 +107,34 @@
   
   .hover-bg-brand-navy-dark:hover {
     background-color: #4C56E8;
+  }
+
+  .bg-brand-brown {
+    background-color: #A0520D;
+  }
+  
+  .bg-brand-light-brown {
+    background-color: #D2691E;
+  }
+
+  .bg-brand-light-brown-50 {
+    background-color: rgba(210, 105, 30, 0.1);
+  }
+  
+  .text-brand-brown {
+    color: #A0520D;
+  }
+  
+  .text-brand-light-brown {
+    color: #D2691E;
+  }
+  
+  .hover\:bg-brand-brown-dark:hover {
+    background-color: #8B4513 !important;
+  }
+  
+  .hover-bg-brand-brown-dark:hover {
+    background-color: #8B4513;
   }
   .nav-link {
     @apply text-slate-600 hover:text-blue-600 font-medium transition-colors duration-200 cursor-pointer;

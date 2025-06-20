@@ -1,10 +1,14 @@
+import os
 from http.client import responses
 import json
 from random import randint
 from smtplib import SMTPException
 from typing import Optional
 from datetime import timedelta
+
+import django
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q, F, CharField, Value, JSONField
 from django.db.models.functions import Concat, Cast
@@ -472,7 +476,8 @@ def get_candidates(request):
         "has_next": page_obj.has_next(),
         "has_previous": page_obj.has_previous(),
         "total_pages": candidates.num_pages,
-        "current_page": page_obj.number
+        "current_page": page_obj.number,
+        "total_count": candidates.count
     }, status=200)
 
 
@@ -512,8 +517,6 @@ def natural_language_query(request):
         new_query.save()
         ai_query['query_id'] = new_query.id
     except Exception as e:
-        if settings.DEBUG:
-            raise e
         return JsonResponse({"Error": str(e)}, status=400)
     return JsonResponse(ai_query, status=200)
 
@@ -600,7 +603,8 @@ def get_ranked_candidates(request):
             "has_next": page_obj.has_next(),
             "has_previous": page_obj.has_previous(),
             "total_pages": paginator.num_pages,
-            "current_page": page_obj.number
+            "current_page": page_obj.number,
+            "total_count": paginator.count
         }, status=200)
     except Exception as e:
         if settings.DEBUG:
@@ -625,23 +629,69 @@ def get_ranked_candidates(request):
     }
 )
 @api_view(['GET'])
-def get_candidate_details(request, candidate_id):
-    candidate = Candidate.objects.filter(id=candidate_id)\
-        .values('id',
-                'first_name',
-                'middle_name',
-                'last_name',
-                'title',
-                'location',
-                'country',
-                'profile_pic',
-                'ai_highlights',
-                'experience_months',
-                'highest_education',
-                'skills',
-                'email',
-                'phone',
-                'resume')
-    if candidate is None:
+def get_candidate_info(request, candidate_id):
+    try:
+        candidate = Candidate.objects.filter(id=candidate_id).first()
+        if candidate is None:
+            return JsonResponse({"Error": "Candidate not found."}, status=404)
+        return JsonResponse({"name": candidate.first_name + " " + candidate.last_name,
+                             "email": candidate.email,
+                             "phone": str(candidate.phone),
+                             "location": candidate.location,
+                             "country": candidate.country,
+                             "title": candidate.title,
+                             "resume": candidate.resume,
+                             "skills": candidate.skills,
+                             "experience_months": candidate.experience_months,
+                             "highest_education": candidate.highest_education,
+                             "has_original_resume": bool(
+                                 candidate.original_resume_path and os.path.exists(candidate.original_resume_path)),
+                             "profile_pic": candidate.profile_pic,
+                             "highlights": candidate.ai_highlights}, status=200)
+    except ValidationError:
         return JsonResponse({"Error": "Candidate not found."}, status=404)
-    return JsonResponse(candidate, status=200)
+
+@extend_schema(
+    tags=['Candidate Profile'],
+    description='Download original resume file',
+    responses={
+        200: OpenApiTypes.BINARY,
+        401: OpenApiTypes.OBJECT,
+        404: OpenApiTypes.OBJECT
+    }
+)
+@api_view(['GET'])
+def download_resume(request, candidate_id):
+    """
+    Download the original resume file for the authenticated candidate.
+    """
+    candidate = Candidate.objects.filter(id=candidate_id).first()
+    if not candidate:
+        return JsonResponse({"Error": "Candidate not found."}, status=404)
+
+    if not candidate.original_resume_path or not os.path.exists(candidate.original_resume_path):
+        return JsonResponse({"Error": "Original resume file not found."}, status=404)
+
+    try:
+        # Determine content type based on file extension
+        file_extension = os.path.splitext(candidate.original_resume_path)[1].lower()
+        content_type_map = {
+            '.txt': 'text/plain',
+            '.pdf': 'application/pdf',
+            '.doc': 'application/msword',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            '.md': 'text/markdown',
+        }
+        content_type = content_type_map.get(file_extension, 'application/octet-stream')
+
+        # Get original filename (we can store this if needed, for now use a generic name)
+        filename = f"resume{file_extension}"
+
+        # Read and return the file
+        with open(candidate.original_resume_path, 'rb') as file:
+            response = HttpResponse(file.read(), content_type=content_type)
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+
+    except Exception as e:
+        return JsonResponse({"Error": f"Failed to download resume file. Error: {repr(e)}"}, status=500)
