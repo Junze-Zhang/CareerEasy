@@ -1,4 +1,5 @@
 CareerEasy/jobs
+CareerEasy/jobs_old
 CareerEasy/prompts
 CareerEasy/resume
 careereasyfrontend/node_modules
@@ -6,6 +7,7 @@ careereasyfrontend/node_modules
 .debug
 *.env
 *.db
+*.sqlite3
 node_modules
 .vscode
 .idea
@@ -17,3 +19,48 @@ keys/
 **/__pycache__/
 __pycache__/
 .vercel
+
+# Database files
+db.sqlite3
+"db copy.sqlite3"
+dp.sqlite3.bak
+identifier.sqlite
+
+# JSON data dumps
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tailwind.config.json
+!next.config.json
+!careereasyweb/package.json
+!careereasyweb/package-lock.json
+!careereasyweb/tsconfig.json
+!careereasyweb/tailwind.config.ts
+!careereasyweb/next.config.ts
+
+# Media files
+media/
+static/
+staticfiles/
+
+# Job postings
+jobs/
+
+# Configuration files
+.dockerignore
+.vercelignore
+vercel.json.backup
+nginx/
+nginx_settings/
+
+# Build and deployment scripts
+build.sh
+init-letsencrypt.sh
+load_data.py
+technical_terms.txt
+CareerEasy/runserver.cmd
+CareerEasy/settings.py.bak
+
+# Claude settings
+.claude/settings.local.json
