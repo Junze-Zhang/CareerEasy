@@ -36,7 +36,7 @@ In the future, these features may be implemented:
 ## Disclaimer on Usage of Generative AI
 All test data, including resumes, job postings, profile pictures, company logos, etc., are generated either by Generative AI (ChatGPT and DeepSeek) or random number generators for development purposes only.
 
-Cursor is used to assist the development of the website. Some parts of the code are AI generated and inspected by the developer.
+Cursor and Claude Code is used to assist the development of the website. Some parts of the code are AI generated and inspected by the developer.
 
 Some crucial features of the website, including resume parsing, jobseeker searching, etc. require the use of generative AIs to function. 
 The Generative AIs used in development are [DeepSeek R1](https://huggingface.co/deepseek-ai/DeepSeek-R1) (requests requiring reasoning) and [Deepseek V3](https://huggingface.co/deepseek-ai/DeepSeek-V3) (other requests), called directly from [DeepSeek API](https://api-docs.deepseek.com/).
