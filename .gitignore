@@ -64,3 +64,8 @@ CareerEasy/settings.py.bak
 
 # Claude settings
 .claude/settings.local.json
+
+# Old frontend files (root level)
+/package.json
+/package-lock.json
+/src/
