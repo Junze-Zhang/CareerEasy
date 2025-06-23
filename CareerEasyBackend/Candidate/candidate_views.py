@@ -306,7 +306,8 @@ def download_resume(request):
             '.txt': 'text/plain',
             '.pdf': 'application/pdf',
             '.doc': 'application/msword',
-            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            '.md': 'text/markdown'
         }
         content_type = content_type_map.get(file_extension, 'application/octet-stream')
 

@@ -63,7 +63,7 @@ export const candidateAPI = {
   extractCandidateInfo: (): Promise<AxiosResponse<ExtractCandidateInfoResponse>> =>
     api.get('/candidate/ai_extract'),
   
-  updateCandidateInfo: (data: Partial<Candidate>): Promise<AxiosResponse<AuthResponse>> =>
+  updateCandidateInfo: (data: CandidateUpdateData): Promise<AxiosResponse<AuthResponse>> =>
     api.post('/candidate/update_info', data),
   
   updateHighlights: (data: UpdateHighlightsData): Promise<AxiosResponse<UpdateHighlightsResponse>> =>

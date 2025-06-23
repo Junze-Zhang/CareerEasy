@@ -6,8 +6,8 @@ import { generalAPI } from '@/services/api';
 import { Career } from '@/types/api';
 
 interface JobTitlesMultiSelectProps {
-  value: number[];
-  onChange: (value: number[]) => void;
+  value: string[];
+  onChange: (value: string[]) => void;
   className?: string;
   placeholder?: string;
 }
@@ -36,21 +36,9 @@ export default function JobTitlesMultiSelect({ value, onChange, className = '', 
       } catch (err) {
         console.error('Failed to fetch job titles:', err);
         setError('Failed to load job titles');
-        // Fallback to some common job titles
-        const fallbackTitles = [
-          { id: 1, name: 'Software Engineer' },
-          { id: 2, name: 'Marketing Manager' },
-          { id: 3, name: 'Sales Representative' },
-          { id: 4, name: 'Product Manager' },
-          { id: 5, name: 'Data Scientist' },
-          { id: 6, name: 'Business Analyst' },
-          { id: 7, name: 'Project Manager' },
-          { id: 8, name: 'Designer' },
-          { id: 9, name: 'Developer' },
-          { id: 10, name: 'Consultant' }
-        ].sort((a, b) => a.name.localeCompare(b.name));
-        setJobTitles(fallbackTitles);
-        setFilteredTitles(fallbackTitles);
+        // No fallback - leave empty arrays
+        setJobTitles([]);
+        setFilteredTitles([]);
       } finally {
         setLoading(false);
       }
@@ -87,7 +75,7 @@ export default function JobTitlesMultiSelect({ value, onChange, className = '', 
     inputRef.current?.focus();
   };
 
-  const handleRemove = (idToRemove: number) => {
+  const handleRemove = (idToRemove: string) => {
     onChange(value.filter(id => id !== idToRemove));
   };
 
@@ -108,7 +96,7 @@ export default function JobTitlesMultiSelect({ value, onChange, className = '', 
   };
 
   // Helper function to get career name by ID
-  const getCareerNameById = (id: number): string => {
+  const getCareerNameById = (id: string): string => {
     const career = jobTitles.find(c => c.id === id);
     return career ? career.name : `Career ${id}`;
   };

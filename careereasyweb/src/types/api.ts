@@ -59,7 +59,7 @@ export interface CandidateSignupData {
   middle_name?: string;
   last_name: string;
   phone: string;
-  preferred_career_types: number[];
+  preferred_career_types: string[];
   location: string;
   country: string;
   title: string;
@@ -76,7 +76,7 @@ export interface CandidateUpdateData {
   experience_months?: number;
   skills?: string[];
   highest_education?: string;
-  preferred_career_types?: number[];
+  preferred_career_types?: string[];
 }
 
 export interface PasswordUpdateData {
@@ -209,7 +209,7 @@ export interface CandidatesResponse {
 
 // Career types
 export interface Career {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   category?: string;

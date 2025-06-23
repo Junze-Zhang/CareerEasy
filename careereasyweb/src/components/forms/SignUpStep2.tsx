@@ -51,12 +51,12 @@ export default function SignUpStep2() {
     return undefined;
   };
 
-  const validateDesiredJobTitles = (titles: number[]): string | undefined => {
+  const validateDesiredJobTitles = (titles: string[]): string | undefined => {
     if (titles.length === 0) return 'Please select at least one desired job title';
     return undefined;
   };
 
-  const handleInputChange = (field: keyof typeof formData, value: string | number[]) => {
+  const handleInputChange = (field: keyof typeof formData, value: string | string[]) => {
     updateFormData(field, value);
 
     let error: string | undefined;
@@ -85,7 +85,7 @@ export default function SignUpStep2() {
         error = validateCity(value as string);
         break;
       case 'desiredJobTitles':
-        error = validateDesiredJobTitles(value as number[]);
+        error = validateDesiredJobTitles(value as string[]);
         break;
     }
 

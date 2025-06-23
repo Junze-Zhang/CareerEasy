@@ -15,7 +15,7 @@ export interface SignUpFormData {
   country: string;
   state: string;
   city: string;
-  desiredJobTitles: number[];
+  desiredJobTitles: string[];
   
   // Step 3 - Account Creation & Profile
   username: string;
