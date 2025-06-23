@@ -16,5 +16,6 @@ urlpatterns = [
     path('search', employer_views.search_candidates),
     path('postjob', employer_views.post_job),
     path('me', employer_views.get_employer_info),
-    path('candidate/<str:candidate_id>', employer_views.get_candidate_details)
+    path('candidate/<str:candidate_id>', employer_views.get_candidate_info),
+    path('download_resume/<str:candidate_id>', employer_views.download_resume),
 ]

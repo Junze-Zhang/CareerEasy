@@ -20,6 +20,7 @@ def llm_request(client,
         response_txt = response.choices[0].message.content
         if not validate_fn(postprocess_fn(response_txt)):
             warnings.warn(validate_err_message + response_txt[:100] + "...")
+            print("warning:" + response_txt)
         else:
             return response.choices[0].message if return_raw else postprocess_fn(response_txt)
     return None

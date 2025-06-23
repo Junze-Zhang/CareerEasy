@@ -22,4 +22,7 @@ Werkzeug
 pyOpenSSL
 vercel
 boto3
+PyPDF2
+python-docx
+docx2txt
 # python -m spacy download en_core_web_md

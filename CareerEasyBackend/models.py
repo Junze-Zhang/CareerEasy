@@ -68,6 +68,7 @@ class Candidate(models.Model):
     preferred_career_types = models.ManyToManyField(Career)
     location = models.CharField(max_length=100)
     country = models.CharField(max_length=100)
+    original_resume_path = EncryptedTextField(blank=True, null=True)
     resume = EncryptedTextField(blank=True, null=True)
     anonymous_resume = models.TextField(blank=True, null=True)
     profile_pic = EncryptedCharField(blank=True, null=True)

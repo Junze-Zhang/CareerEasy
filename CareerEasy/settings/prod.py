@@ -10,7 +10,8 @@ ALLOWED_HOSTS = [
     'career-easy.com',
     'www.career-easy.com',
     'localhost',
-    '127.0.0.1'
+    '127.0.0.1',
+    '15.223.47.120'
 ]
 SECRET_KEY = os.environ.get('SECRET_KEY', None)
 if not SECRET_KEY:
@@ -22,6 +23,7 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SECURE_HSTS_SECONDS = 60*60*24*365  # 1 year in seconds
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+
 SECURE_HSTS_PRELOAD = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 

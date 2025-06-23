@@ -1,3 +1,4 @@
+import traceback
 from http.client import responses
 import json
 from random import randint
@@ -15,6 +16,8 @@ from django.db.models import Q, Case, When, BooleanField
 from django.shortcuts import get_object_or_404
 from django.template import loader
 from django.utils.timezone import now
+from django.utils import timezone
+from django.core.cache import cache
 from django.http import JsonResponse, Http404, HttpResponse, HttpRequest
 from django.core.mail import send_mail
 from rest_framework.decorators import api_view
@@ -27,14 +30,15 @@ from CareerEasy.constants import *
 from CareerEasyBackend.Candidate.models import *
 from CareerEasyBackend.initDB import S3_BASE_URL
 from CareerEasyBackend.models import *
-from CareerEasyBackend.careereasy_utils import am_i_a_match, anonymize_resume, extract_from_resume, update_ai_highlights
+from CareerEasyBackend.careereasy_utils import am_i_a_match, anonymize_resume, extract_from_resume, \
+    update_ai_highlights, upload_profile_picture_to_s3, extract_text_from_file, logger
 
 
 @extend_schema(
     tags=['Candidate Account Management'],
-    description='Register a new candidate account',
+    description='Register a new candidate account with optional profile picture',
     request={
-        'application/json': {
+        'multipart/form-data': {
             'type': 'object',
             'properties': {
                 'username': {'type': 'string', 'description': 'Username for the account'},
@@ -45,13 +49,18 @@ from CareerEasyBackend.careereasy_utils import am_i_a_match, anonymize_resume, e
                 'work_email': {'type': 'string', 'format': 'email', 'description': 'Work email (optional)'},
                 'phone': {'type': 'string', 'description': 'Phone number'},
                 'password': {'type': 'string', 'description': 'Account password'},
-                'preferred_career_types': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Preferred career types'},
-                'location': {'type': 'string', 'description': 'Current location'},
+                'preferred_career_types': {'type': 'string',
+                                           'description': 'Comma-separated preferred career type IDs'},
+                'location': {'type': 'string', 'description': 'Current location (optional if state and city provided)'},
+                'state': {'type': 'string', 'description': 'State/Province (optional if location provided)'},
+                'city': {'type': 'string', 'description': 'City (optional if location provided)'},
                 'country': {'type': 'string', 'description': 'Country'},
-                'title': {'type': 'string', 'description': 'Current job title'}
+                'title': {'type': 'string', 'description': 'Current job title'},
+                'profile_pic': {'type': 'string', 'format': 'binary',
+                                'description': 'Profile picture (optional, max 10MB)'}
             },
             'required': ['username', 'first_name', 'last_name', 'email', 'phone', 'password',
-                         'preferred_career_types', 'location', 'country', 'title']
+                         'preferred_career_types', 'country', 'title']
         }
     },
     responses={
@@ -73,15 +82,27 @@ def sign_up(request):
     password = data.get('password')
     preferred_career_types = data.get('preferred_career_types')
     location = data.get('location')
+    state = data.get('state')
+    city = data.get('city')
     country = data.get('country')
     title = data.get('title')
-#    profile_pic = data.get('profile_pic')
-    # TODO: support uploading profile picture
-    profile_pic = S3_BASE_URL.format(n=random.randint(1, 10))
 
-    if not all([username, first_name, last_name, email, phone, password, preferred_career_types, location, country, title]):
+    # Set default profile picture URL
+    profile_pic_url = S3_BASE_URL.format(n=random.randint(1, 10))
+
+    # Parse preferred_career_types if it's a string (from multipart form data)
+    if isinstance(preferred_career_types, str):
+        try:
+            preferred_career_types = [x for x in preferred_career_types.split(',')]
+        except ValueError:
+            return JsonResponse({"Error": "Invalid preferred career types format."}, status=400)
+
+    if not all([username, first_name, last_name, email, phone, password, preferred_career_types, country, title]):
         return JsonResponse({"Error": "Missing required fields."}, status=400)
-
+    if not location:
+        if not (state and city):
+            return JsonResponse({"Error": "Missing required fields."}, status=400)
+        location = f"{city}, {state}"
     existing_account = CandidateAccount.objects.filter(
         username=username).first()
     if existing_account is not None:
@@ -89,10 +110,10 @@ def sign_up(request):
     existing_account = CandidateAccount.objects.filter(email=email).first()
     if existing_account is not None:
         return JsonResponse({"Error": "Email is already taken."}, status=409)
-    existing_account = CandidateAccount.objects.filter(
-        email=work_email).first()
-    if existing_account is not None:
-        return JsonResponse({"Error": "Email is already taken."}, status=409)
+    # existing_account = CandidateAccount.objects.filter(
+    #     email=work_email).first()
+    # if existing_account is not None:
+    #     return JsonResponse({"Error": "Email is already taken."}, status=409)
 
     if work_email is None:
         work_email = email
@@ -103,15 +124,27 @@ def sign_up(request):
                               phone=phone,
                               location=location,
                               country=country,
-                              profile_pic=profile_pic,
+                              profile_pic=profile_pic_url,
                               title=title,
                               standardized_title=STANDARDIZE_FN(title))
     new_candidate.save()  # Save the candidate first
 
+    # Upload custom profile picture if provided
+    if 'profile_pic' in request.FILES:
+        try:
+            profile_pic_file = request.FILES['profile_pic']
+            custom_profile_pic_url = upload_profile_picture_to_s3(profile_pic_file, str(new_candidate.id))
+            new_candidate.profile_pic = custom_profile_pic_url
+            new_candidate.save()  # Update with custom profile picture URL
+        except Exception as e:
+            # Log the error but don't fail the account creation
+            logger.warning(f"Profile picture upload failed for candidate {new_candidate.id}: {str(e)}")
+            # Account will be created with default profile picture
+
     for career_id in preferred_career_types:
         career = Career.objects.filter(id=career_id).first()
         if career is None:
-            pass  # TODO: support adding new career types
+            pass  # Adding new career types should be done by employers
         else:
             new_candidate.preferred_career_types.add(career)
     encrypted_password = hashpw(password.encode('utf8'), gensalt())
@@ -131,7 +164,8 @@ def sign_up(request):
         'multipart/form-data': {
             'type': 'object',
             'properties': {
-                'resume': {'type': 'string', 'format': 'binary', 'description': 'Resume file (text format)'}
+                'resume': {'type': 'string', 'format': 'binary',
+                           'description': 'Resume file (.txt, .pdf, .doc, .docx, .md)'}
             },
             'required': ['resume']
         }
@@ -147,8 +181,8 @@ def sign_up(request):
 def upload_resume(request):
     """
     Handle resume file uploads.
-    Accepts plain text files.
-    # TODO: support PDF and DOCX files
+    Supports txt, pdf, doc, docx, md files.
+    Stores original files locally with random IDs and extracts text for AI analysis.
     """
     if 'resume' not in request.FILES:
         return JsonResponse({"Error": "No file was uploaded."}, status=400)
@@ -163,34 +197,132 @@ def upload_resume(request):
     if not candidate:
         return JsonResponse({"Error": "Candidate not found."}, status=404)
 
-    resume_text = ""
-    # Validate if file is a plain text file
+    # Rate limiting - 5 uploads per 10 minutes
+    cache_key = f"upload_count_{candidate_id}"
+    current_time = timezone.now()
+    upload_history = cache.get(cache_key, [])
+
+    # Clean old entries (older than 10 minutes)
+    upload_history = [timestamp for timestamp in upload_history
+                      if current_time - timestamp < timedelta(minutes=10)]
+
+    if len(upload_history) >= 5:
+        return JsonResponse({
+            "Error": "Upload limit reached. Please wait and try again after 10 minutes."
+        }, status=429)
+
+    # Add current upload to history
+    upload_history.append(current_time)
+    cache.set(cache_key, upload_history, timeout=600)  # 10 minutes
+
+    # Validate file size (max 25MB for documents)
+    max_size = 25 * 1024 * 1024  # 25MB
+    if file.size > max_size:
+        return JsonResponse({"Error": "File size too large. Maximum size is 25MB."}, status=400)
+
+    # Validate file extension
+    if not hasattr(file, 'name') or not file.name:
+        return JsonResponse({"Error": "File must have a valid name and extension."}, status=400)
+
+    file_extension = os.path.splitext(file.name)[1].lower()
+    # allowed_extensions = ['.txt', '.pdf', '.doc', '.docx']
+    # if file_extension not in allowed_extensions:
+    #     return JsonResponse({
+    #         "Error": f"Unsupported file format. Allowed formats: {', '.join(allowed_extensions)}"
+    #     }, status=400)
+
+    # Extract text content from file
     try:
-        resume_text = file.read().decode('utf-8')
-    except:
-        return JsonResponse({"Error": "Invalid file type. Only plain text files are allowed."}, status=400)
+        resume_text = extract_text_from_file(file)
+        if not resume_text.strip():
+            return JsonResponse({"Error": "No text content found in the uploaded file."}, status=400)
+    except Exception as e:
+        return JsonResponse({"Error": str(e)}, status=400)
 
-    # Create media directory if it doesn't exist
+    # Create resumes directory if it doesn't exist
     media_root = settings.MEDIA_ROOT
-    if not os.path.exists(media_root):
-        os.makedirs(media_root)
+    resumes_dir = os.path.join(media_root, 'resumes')
+    if not os.path.exists(resumes_dir):
+        os.makedirs(resumes_dir)
 
-    # Generate unique filename
-    filename = f"resumes/{candidate_id}_{file.name}"
-    filepath = os.path.join(media_root, filename)
+    # Generate random filename to prevent direct access and filename conflicts
+    random_id = uuid.uuid4().hex
+    filename = f"resumes/{random_id}{file_extension}"
 
-    # Save the file
+    # Reset file pointer before saving
+    file.seek(0)
+
+    # Save the original file with random name
     fs = FileSystemStorage()
-    saved_file = fs.save(filename, file)
+    saved_file_path = fs.save(filename, file)
 
-    # Update candidate's resume field with the file path
+    # Get the full file path for storage in database
+    full_file_path = os.path.join(media_root, saved_file_path)
+
+    # Update candidate's resume fields
     candidate.resume = resume_text
+    candidate.original_resume_path = full_file_path  # Store path to original file
     candidate.anonymous_resume = anonymize_resume(resume_text)
     candidate.standardized_resume = STANDARDIZE_FN(resume_text)
     candidate.standardized_anonymous_resume = STANDARDIZE_FN(candidate.anonymous_resume)
     candidate.save()
 
-    return JsonResponse({"Success": "Resume uploaded successfully."}, status=200)
+    return JsonResponse({
+        "Success": "Resume uploaded successfully.",
+        "file_type": file_extension,
+        "text_length": len(resume_text)
+    }, status=200)
+
+
+@extend_schema(
+    tags=['Candidate Profile'],
+    description='Download original resume file',
+    responses={
+        200: OpenApiTypes.BINARY,
+        401: OpenApiTypes.OBJECT,
+        404: OpenApiTypes.OBJECT
+    }
+)
+@api_view(['GET'])
+def download_resume(request):
+    """
+    Download the original resume file for the authenticated candidate.
+    """
+    candidate_id = request.COOKIES.get('candidate_id')
+    if not candidate_id:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    candidate = Candidate.objects.filter(id=candidate_id).first()
+    if not candidate:
+        return JsonResponse({"Error": "Candidate not found."}, status=404)
+
+    if not candidate.original_resume_path or not os.path.exists(candidate.original_resume_path):
+        return JsonResponse({"Error": "Original resume file not found."}, status=404)
+
+    try:
+        # Determine content type based on file extension
+        file_extension = os.path.splitext(candidate.original_resume_path)[1].lower()
+        content_type_map = {
+            '.txt': 'text/plain',
+            '.pdf': 'application/pdf',
+            '.doc': 'application/msword',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            '.md': 'text/markdown'
+        }
+        content_type = content_type_map.get(file_extension, 'application/octet-stream')
+
+        # Get original filename (we can store this if needed, for now use a generic name)
+        filename = f"resume{file_extension}"
+
+        # Read and return the file
+        with open(candidate.original_resume_path, 'rb') as file:
+            response = HttpResponse(file.read(), content_type=content_type)
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+
+    except Exception as e:
+        logger.error(f"Error downloading resume: {str(e)}")
+        return JsonResponse({"Error": "Failed to download resume file."}, status=500)
 
 
 @extend_schema(
@@ -209,27 +341,71 @@ def extract_candidate_info(request):
     candidate = Candidate.objects.filter(id=candidate_id).first()
     if not candidate:
         return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+    not_complete = []
+    # Rate limiting - 5 API calls per 10 minutes
+    cache_key = f"api_call_{candidate_id}"
+    current_time = timezone.now()
+    api_call_history = cache.get(cache_key, [])
+
+    # Clean old entries (older than 10 minutes)
+    api_call_history = [timestamp for timestamp in api_call_history
+                        if current_time - timestamp < timedelta(minutes=10)]
+
+    if len(api_call_history) >= 5:
+        return JsonResponse({
+            "Error": "Upload limit reached. Please wait and try again after 10 minutes."
+        }, status=429)
+
+    # Add current API call to history
+    api_call_history.append(current_time)
+    cache.set(cache_key, api_call_history, timeout=600)  # 10 minutes
+
     try:
-        candidate_info = extract_from_resume(candidate)
+        candidate_info, errors = extract_from_resume(candidate)
         if settings.DEBUG:
             print(candidate_info)
     except Exception as e:
-        return JsonResponse({"Error": str(e) + " Please try again."}, status=400)
-    candidate.experience_months = candidate_info["exp_month"]
-    candidate.skills = candidate_info["skills"]
-    candidate.standardized_skills = [
-        STANDARDIZE_FN(skill) for skill in candidate.skills]
-    candidate.ai_highlights = candidate_info["ai_highlights"]
-    candidate.standardized_ai_highlights = [STANDARDIZE_FN(
-        highlight) for highlight in candidate.ai_highlights]
-    candidate.highest_education = candidate_info["highest_education"]
-    candidate.standardized_highest_education = STANDARDIZE_FN(
-        candidate.highest_education)
+        if settings.DEBUG:
+            traceback.print_exc()
+        return JsonResponse({"Error": repr(e) + " Please try again."}, status=400)
+
+    if candidate_info["exp_month"]:
+        candidate.experience_months = candidate_info["exp_month"]
+    else:
+        not_complete.append("exp_month")
+    if candidate_info["skills"]:
+        candidate.skills = candidate_info["skills"]
+        candidate.standardized_skills = [
+            STANDARDIZE_FN(skill) for skill in candidate.skills]
+    else:
+        not_complete.append("skills")
+    if candidate_info["ai_highlights"]:
+        candidate.ai_highlights = candidate_info["ai_highlights"]
+        candidate.standardized_ai_highlights = [STANDARDIZE_FN(
+            highlight) for highlight in candidate.ai_highlights]
+    else:
+        not_complete.append("ai_highlights")
+    if candidate_info["highest_education"]:
+        candidate.highest_education = candidate_info["highest_education"]
+        candidate.standardized_highest_education = STANDARDIZE_FN(
+            candidate.highest_education)
+    else:
+        not_complete.append("highest_education")
     candidate.save()
-    return JsonResponse({"experience": f"{candidate.experience_months // 12} years {candidate.experience_months % 12} months",
-                         "skills": candidate.skills,
-                         "highest_education": candidate.highest_education,
-                         "ai_highlights": candidate.ai_highlights}, status=200)
+    if len(not_complete) > 0:
+        return JsonResponse(
+            {"experience": f"{candidate.experience_months // 12} years {candidate.experience_months % 12} months",
+             "skills": candidate.skills,
+             "highest_education": candidate.highest_education,
+             "ai_highlights": candidate.ai_highlights,
+             "warning": "Candidate information extraction not complete. Missing info: " + ", ".join(not_complete),
+             "errors": errors}, status=200)
+    return JsonResponse(
+        {"experience": f"{candidate.experience_months // 12} years {candidate.experience_months % 12} months",
+         "skills": candidate.skills,
+         "highest_education": candidate.highest_education,
+         "ai_highlights": candidate.ai_highlights}, status=200)
+
 
 @extend_schema(
     tags=['Candidate Profile'],
@@ -260,25 +436,27 @@ def update_candidate_info(request):
     first_name = data.get('first_name')
     middle_name = data.get('middle_name')
     last_name = data.get('last_name')
-    email = data.get('email')
+    email = data.get('work_email')
     phone = data.get('phone')
     location = data.get('location')
     country = data.get('country')
     experience_months = data.get('experience_months')
+    title = data.get('title')
     skills = data.get('skills')
     highest_education = data.get('highest_education')
     preferred_career_types = data.get('preferred_career_types')
-    for field in ["first_name", 
-                  "middle_name", 
-                  "last_name", 
+    for field in ["first_name",
+                  "middle_name",
+                  "last_name",
                   "phone",
                   "email",
-                  "location", 
-                  "country", 
+                  "location",
+                  "country",
                   "experience_months",
                   "skills",
-                  "highest_education"]:
-        if field in data:
+                  "highest_education",
+                  "title"]:
+        if field in data and data.get(field) != "":
             setattr(candidate, field, data.get(field))
     if preferred_career_types is not None and len(preferred_career_types) > 0:
         candidate.preferred_career_types.clear()
@@ -334,6 +512,7 @@ def update_highlights(request):
     candidate.save()
     return JsonResponse({"highlights": ai_highlights}, status=200)
 
+
 @extend_schema(
     tags=['Candidate Account Management'],
     description='Login to candidate account',
@@ -341,7 +520,7 @@ def update_highlights(request):
         'application/json': {
             'type': 'object',
             'properties': {
-                'username': {'type': 'string', 'description': 'Username'},
+                'username': {'type': 'string', 'description': 'Username or email address'},
                 'password': {'type': 'string', 'description': 'Account password'}
             },
             'required': ['username', 'password']
@@ -358,11 +537,16 @@ def log_in(request):
     data = request.data
     username = data.get('username')
     password = data.get('password')
+    email = data.get('email')
 
     if not all([username, password]):
         return JsonResponse({"Error": "Missing required fields."}, status=400)
 
+    # Try to find account by username first, then by email
     account = CandidateAccount.objects.filter(username=username).first()
+    if account is None:
+        account = CandidateAccount.objects.filter(email=username).first()
+
     if account is None:
         return JsonResponse({"Error": "Invalid username or password."}, status=401)
 
@@ -370,31 +554,31 @@ def log_in(request):
         return JsonResponse({"Error": "Invalid username or password."}, status=401)
 
     response = JsonResponse({"Success": "Signed in successfully."}, status=200)
-    
+
     # Get the host from the request
     host = request.get_host()
     is_localhost = 'localhost' in host or '127.0.0.1' in host
-    
+
     # Set cookies with proper attributes
     cookie_options = {
         'key': 'candidate_id',
         'value': account.candidate.id,
         'max_age': 60 * 60 * 3,  # 3 hours
-        'samesite': 'None',      # Changed from 'Lax' to 'None' for cross-origin
-        'secure': True,          # Always use secure
+        'samesite': 'Lax' if is_localhost else 'None',  # Use Lax for localhost, None for production
+        'secure': False if is_localhost else True,  # Disable secure for localhost HTTP
     }
-    
+
     # Only set domain in production
     if not is_localhost:
         cookie_options['domain'] = '.career-easy.com'  # Domain for subdomain support in production
-    
+
     response.set_cookie(**cookie_options)
-    
+
     # Set candidate_account_id cookie with same options
     cookie_options['key'] = 'candidate_account_id'
     cookie_options['value'] = account.id
     response.set_cookie(**cookie_options)
-    
+
     return response
 
 
@@ -409,23 +593,21 @@ def log_in(request):
 def log_out(request):
     response = JsonResponse(
         {"Success": "Signed out successfully."}, status=200)
-    
+
     # Get the host from the request
     host = request.get_host()
     is_localhost = 'localhost' in host or '127.0.0.1' in host
-    
+
     # Delete cookies with proper attributes
-    cookie_options = {
-        'key': 'candidate_id',
-        'domain': '.career-easy.com'
-    }
-    
-    response.delete_cookie(**cookie_options)
-    
-    # Delete candidate_account_id cookie with same options
-    cookie_options['key'] = 'candidate_account_id'
-    response.delete_cookie(**cookie_options)
-    
+    if is_localhost:
+        # For localhost, delete without domain
+        response.delete_cookie('candidate_id')
+        response.delete_cookie('candidate_account_id')
+    else:
+        # For production, delete with domain
+        response.delete_cookie('candidate_id', domain='.career-easy.com')
+        response.delete_cookie('candidate_account_id', domain='.career-easy.com')
+
     return response
 
 
@@ -462,12 +644,145 @@ def update_password(request):
     if account is None:
         return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
 
-    if not checkpw(old_password.encode('utf8'), account.password):
+    if not checkpw(old_password.encode('utf8'), account.password.encode('utf8')):
         return JsonResponse({"Error": "Incorrect old password."}, status=401)
 
-    account.password = hashpw(new_password.encode('utf8'), gensalt())
+    encrypted_password = hashpw(new_password.encode('utf8'), gensalt())
+    account.password = encrypted_password.decode('utf8')
     account.save()
     return JsonResponse({"Success": "Password updated successfully."}, status=200)
+
+
+@extend_schema(
+    tags=['Candidate Profile'],
+    description='Upload or update candidate profile picture',
+    request={
+        'multipart/form-data': {
+            'type': 'object',
+            'properties': {
+                'profile_pic': {'type': 'string', 'format': 'binary', 'description': 'Profile picture file (max 10MB)'}
+            },
+            'required': ['profile_pic']
+        }
+    },
+    responses={
+        200: OpenApiTypes.OBJECT,
+        400: OpenApiTypes.OBJECT,
+        401: OpenApiTypes.OBJECT,
+        404: OpenApiTypes.OBJECT
+    }
+)
+@api_view(['POST'])
+def update_profile_picture(request):
+    """
+    Update candidate's profile picture by uploading to S3.
+    """
+    if 'profile_pic' not in request.FILES:
+        return JsonResponse({"Error": "No profile picture file was uploaded."}, status=400)
+
+    candidate_id = request.COOKIES.get('candidate_id')
+    if not candidate_id:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    candidate = Candidate.objects.filter(id=candidate_id).first()
+    if not candidate:
+        return JsonResponse({"Error": "Candidate not found."}, status=404)
+
+    try:
+        profile_pic_file = request.FILES['profile_pic']
+        new_profile_pic_url = upload_profile_picture_to_s3(profile_pic_file, str(candidate.id))
+
+        # Update candidate's profile picture URL
+        candidate.profile_pic = new_profile_pic_url
+        candidate.save()
+
+        return JsonResponse({
+            "Success": "Profile picture updated successfully.",
+            "profile_pic_url": new_profile_pic_url
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({"Error": f"Profile picture upload failed: {str(e)}"}, status=400)
+
+
+@extend_schema(
+    tags=['Candidate Account Management'],
+    description='Get candidate account information (username and email)',
+    responses={
+        200: OpenApiTypes.OBJECT,
+        401: OpenApiTypes.OBJECT
+    }
+)
+@api_view(['GET'])
+def get_account_info(request):
+    account_id = request.COOKIES.get('candidate_account_id')
+
+    if not account_id:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    account = CandidateAccount.objects.filter(id=account_id).first()
+    if account is None:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    return JsonResponse({
+        "username": account.username,
+        "email": account.email
+    }, status=200)
+
+
+@extend_schema(
+    tags=['Candidate Account Management'],
+    description='Update candidate account information (username and email)',
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'username': {'type': 'string', 'description': 'New username'},
+                'email': {'type': 'string', 'format': 'email', 'description': 'New email address'}
+            }
+        }
+    },
+    responses={
+        200: OpenApiTypes.OBJECT,
+        400: OpenApiTypes.OBJECT,
+        401: OpenApiTypes.OBJECT,
+        409: OpenApiTypes.OBJECT
+    }
+)
+@api_view(['POST'])
+def update_account(request):
+    data = request.data
+    account_id = request.COOKIES.get('candidate_account_id')
+    username = data.get('username')
+    email = data.get('email')
+
+    if not account_id:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    account = CandidateAccount.objects.filter(id=account_id).first()
+    if account is None:
+        return JsonResponse({"Error": "Session expired. Please log in again."}, status=401)
+
+    # Check username availability (excluding current account)
+    if username is not None:
+        if username.strip() == "":
+            return JsonResponse({"Error": "Username cannot be empty."}, status=400)
+        existing_username = CandidateAccount.objects.filter(username=username).exclude(id=account_id).first()
+        if existing_username:
+            return JsonResponse({"Error": "Username is already taken."}, status=409)
+        account.username = username
+
+    # Check email availability (excluding current account)
+    if email is not None:
+        if email.strip() == "":
+            return JsonResponse({"Error": "Email cannot be empty."}, status=400)
+        existing_email = CandidateAccount.objects.filter(email=email).exclude(id=account_id).first()
+        if existing_email:
+            return JsonResponse({"Error": "Email is already taken."}, status=409)
+        account.email = email
+
+    account.save()
+    return JsonResponse({"Success": "Account updated successfully."}, status=200)
 
 
 @extend_schema(
@@ -528,25 +843,30 @@ def get_candidate_info(request, candidate_id):
         if signed_in_candidate_id is None or uuid.UUID(signed_in_candidate_id) != uuid.UUID(candidate_id):
             # Only return public information
             return JsonResponse({"name": candidate.first_name + " " + candidate.last_name,
-                                "email": candidate.email,
-                                "phone": str(candidate.phone),
-                                "location": candidate.location,
-                                "country": candidate.country,
-                                "title": candidate.title,
-                                "resume": candidate.resume,
-                                "highlights": candidate.ai_highlights}, status=200)
+                                 "email": candidate.email,
+                                 "phone": str(candidate.phone),
+                                 "location": candidate.location,
+                                 "country": candidate.country,
+                                 "title": candidate.title,
+                                 # "resume": candidate.resume,
+                                 "profile_pic": candidate.profile_pic,
+                                 "highlights": candidate.ai_highlights}, status=200)
         return JsonResponse({"name": candidate.first_name + " " + candidate.last_name,
-                            "email": candidate.email,
-                            "phone": str(candidate.phone),
-                            "location": candidate.location,
-                            "country": candidate.country,
-                            "title": candidate.title,
-                            "highlights": candidate.ai_highlights,
-                            "skills": candidate.skills,
-                            "highest_education": candidate.highest_education,
-                            "experience_months": candidate.experience_months,
-                            "resume": candidate.resume,
-                            "preferred_career_types": [career.name for career in candidate.preferred_career_types.all()]}, status=200)
+                             "email": candidate.email,
+                             "phone": str(candidate.phone),
+                             "location": candidate.location,
+                             "country": candidate.country,
+                             "title": candidate.title,
+                             "highlights": candidate.ai_highlights,
+                             "skills": candidate.skills,
+                             "highest_education": candidate.highest_education,
+                             "experience_months": candidate.experience_months,
+                             "resume": candidate.resume,
+                             "profile_pic": candidate.profile_pic,
+                             "has_original_resume": bool(
+                                 candidate.original_resume_path and os.path.exists(candidate.original_resume_path)),
+                             "preferred_career_types": [{"name": career.name, "id": career.id} for career in
+                                                        candidate.preferred_career_types.all()]}, status=200)
     except django.core.exceptions.ValidationError:
         return JsonResponse({"Error": "Candidate not found."}, status=404)
 
@@ -593,6 +913,7 @@ def get_posted_jobs(request):
                        'company__logo',
                        'company__location',
                        'company__country',
+                       'url',
                        'is_match').order_by('-is_match', '-posted_at')
     paginator = Paginator(jobs, page_size)
     page_obj = paginator.page(page)
@@ -602,7 +923,8 @@ def get_posted_jobs(request):
         "has_next": page_obj.has_next(),
         "has_previous": page_obj.has_previous(),
         "total_pages": paginator.num_pages,
-        "current_page": page_obj.number
+        "current_page": page_obj.number,
+        "total_count": paginator.count
     }, status=200)
 
 
@@ -617,17 +939,18 @@ def get_posted_jobs(request):
 @api_view(['GET'])
 def get_job_details(request, job_id):
     try:
-        job = JobPosting.objects.filter(id=job_id).values('title',
-                                                      'description',
-                                                      'level',
-                                                      'career__name',
-                                                      'yoe',
-                                                      'company__id',
-                                                      'company__name',
-                                                      'company__logo',
-                                                      'company__location',
-                                                      'company__country',
-                                                      'url').first()
+        job = JobPosting.objects.filter(id=job_id).values('id',
+                                                          'title',
+                                                          'description',
+                                                          'level',
+                                                          'career__name',
+                                                          'yoe',
+                                                          'company__id',
+                                                          'company__name',
+                                                          'company__logo',
+                                                          'company__location',
+                                                          'company__country',
+                                                          'url').first()
         if job is None:
             return JsonResponse({"Error": "Job posting not found."}, status=404)
         return JsonResponse(job, status=200)

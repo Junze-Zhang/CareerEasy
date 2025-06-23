@@ -30,14 +30,13 @@ In the future, these features may be implemented:
 ## Demo Screenshots
 ![demo-1.png](demo-1.png)
 ![demo-2.png](demo-2.png)
-## Tech Demo Disclaimer
-This website is in the early stages of development with very limited security measures and incomplete software testing.
-Please do not enter sensitive information. The website may have significant numbers of bugs and vulnerabilities. \
-If you are willing to help, please report bugs as GitHub Issues.
+![demo-3.png](demo-3.png)
+![demo-4.png](demo-4.png)
+
 ## Disclaimer on Usage of Generative AI
 All test data, including resumes, job postings, profile pictures, company logos, etc., are generated either by Generative AI (ChatGPT and DeepSeek) or random number generators for development purposes only.
 
-Cursor is used to assist the development of the website. Some parts of the code are AI generated and inspected by the developer.
+Cursor and Claude Code are used to assist the development of the website. Some parts of the code are AI generated and inspected by the developer.
 
 Some crucial features of the website, including resume parsing, jobseeker searching, etc. require the use of generative AIs to function. 
-The Generative AIs used in development are [DeepSeek R1](https://huggingface.co/deepseek-ai/DeepSeek-R1) (requests that require reasoning) and [Deepseek V3](https://huggingface.co/deepseek-ai/DeepSeek-V3) (other requests), called directly from [DeepSeek API](https://api-docs.deepseek.com/). Other generative AIs will be available in the future for selection.
+The Generative AIs used in development are [DeepSeek R1](https://huggingface.co/deepseek-ai/DeepSeek-R1) (requests requiring reasoning) and [Deepseek V3](https://huggingface.co/deepseek-ai/DeepSeek-V3) (other requests), called directly from [DeepSeek API](https://api-docs.deepseek.com/).
