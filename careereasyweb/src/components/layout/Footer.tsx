@@ -70,7 +70,7 @@ export default function Footer() {
         <div className="border-t border-gray-400 mt-12 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <p className="text-gray-600 text-sm">
-              © 2025 Developed by Junze Zhang
+              © 2025 InsightAI. Developed by Junze Zhang
             </p>
             <div className="flex space-x-6">
               {/* Project GitHub Link */}

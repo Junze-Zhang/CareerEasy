@@ -17,15 +17,15 @@ SECRET_KEY = os.environ.get('SECRET_KEY', None)
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY is not set in the environment variables.")
 
-# Production Security Settings
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SECURE_HSTS_SECONDS = 60*60*24*365  # 1 year in seconds
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# Local deployment - disable SSL redirects but keep other security
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SECURE_HSTS_SECONDS = 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 
-SECURE_HSTS_PRELOAD = True
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_HSTS_PRELOAD = False
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Commented out for local
 
 DATABASES = {
     'default': {
@@ -67,13 +67,13 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# Cookie settings
-SESSION_COOKIE_SAMESITE = 'None'  # Required for cross-origin requests
-CSRF_COOKIE_SAMESITE = 'None'     # Required for cross-origin requests
-SESSION_COOKIE_DOMAIN = ".career-easy.com"
-CSRF_COOKIE_DOMAIN = ".career-easy.com"
-SESSION_COOKIE_SECURE = True      # Only send cookies over HTTPS
-CSRF_COOKIE_SECURE = True         # Only send cookies over HTTPS
+# Cookie settings for local deployment
+SESSION_COOKIE_SAMESITE = 'Lax'  # Changed from 'None' for local
+CSRF_COOKIE_SAMESITE = 'Lax'     # Changed from 'None' for local
+# SESSION_COOKIE_DOMAIN = ".career-easy.com"  # Commented out for local
+# CSRF_COOKIE_DOMAIN = ".career-easy.com"     # Commented out for local
+SESSION_COOKIE_SECURE = False     # Allow cookies over HTTP for local
+CSRF_COOKIE_SECURE = False        # Allow cookies over HTTP for local
 
 # Static and Media files
 STATIC_ROOT = BASE_DIR / 'staticfiles'
